@@ -157,3 +157,28 @@ def test_restart_reconciliation(tmp_path):
         # The record survived; the rating never moved.
         assert body["state"]["moves"] == "e2,e8"
     db.reset_for_tests()
+
+
+def test_cf_connecting_ip_buckets(client, monkeypatch):
+    """Behind Cloudflare every TCP peer is the proxy; the credential rate
+    limit must key on CF-Connecting-IP or one hot address locks out everyone."""
+    from palisade import api, limits
+
+    monkeypatch.setattr(api, "TRUST_CF_IP", True)
+    monkeypatch.setattr(limits.credentials, "burst", 2.0)
+    monkeypatch.setattr(limits.credentials, "rate", 0.0001)
+    try:
+        for i in range(2):  # exhaust one address's bucket
+            client.post("/api/login",
+                        json={"username": "nope", "password": "wrong-pw-123"},
+                        headers={"CF-Connecting-IP": "203.0.113.7"})
+        r = client.post("/api/login",
+                        json={"username": "nope", "password": "wrong-pw-123"},
+                        headers={"CF-Connecting-IP": "203.0.113.7"})
+        assert r.status_code == 429
+        r = client.post("/api/login",
+                        json={"username": "nope", "password": "wrong-pw-123"},
+                        headers={"CF-Connecting-IP": "198.51.100.9"})
+        assert r.status_code == 401  # different address: own bucket
+    finally:
+        limits.credentials.state.clear()

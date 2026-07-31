@@ -21,9 +21,19 @@ KEEPALIVE = 6.0
 # over plain http would otherwise lose its session cookie silently.
 COOKIE_SECURE = os.environ.get("PALISADE_SECURE_COOKIES", "") not in ("", "0")
 COOKIE_MAX_AGE = 30 * 24 * 3600
+# Behind Cloudflare (tunnel or proxied DNS) every TCP peer is the proxy, so
+# rate limiting on request.client.host would put the whole internet in one
+# bucket. Cloudflare strips CF-Connecting-IP from client requests and sets it
+# to the real address, so it is trustworthy exactly when this flag says the
+# only way in is through Cloudflare (the server binds 127.0.0.1 either way).
+TRUST_CF_IP = os.environ.get("PALISADE_TRUST_CF_IP", "") not in ("", "0")
 
 
 def _client_key(request: Request) -> str:
+    if TRUST_CF_IP:
+        ip = request.headers.get("cf-connecting-ip")
+        if ip:
+            return ip
     return request.client.host if request.client else "unknown"
 
 
