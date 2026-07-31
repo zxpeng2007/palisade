@@ -182,3 +182,33 @@ def test_cf_connecting_ip_buckets(client, monkeypatch):
         assert r.status_code == 401  # different address: own bucket
     finally:
         limits.credentials.state.clear()
+
+
+def test_https_redirect_when_forced(tmp_path, monkeypatch):
+    """Secure cookies are dropped by browsers on plain http, so an http
+    visitor must be redirected rather than silently failing to sign in."""
+    import os
+    os.environ["PALISADE_DB"] = str(tmp_path / "https.db")
+    os.environ["PALISADE_FORCE_HTTPS"] = "1"
+    db.reset_for_tests()
+    import importlib
+    import palisade.app as appmod
+    importlib.reload(appmod)
+    try:
+        with TestClient(appmod.app, base_url="http://testserver") as c:
+            r = c.get("/api/user/nobody", follow_redirects=False,
+                      headers={"x-forwarded-proto": "http"})
+            assert r.status_code == 308
+            assert r.headers["location"].startswith("https://")
+            # Already https at the edge: passes through.
+            r = c.get("/api/user/nobody", follow_redirects=False,
+                      headers={"x-forwarded-proto": "https"})
+            assert r.status_code == 404
+            # Direct loopback (no proxy header) is a local client such as the
+            # house bot; redirecting it would send it to https://127.0.0.1.
+            r = c.get("/api/user/nobody", follow_redirects=False)
+            assert r.status_code == 404
+    finally:
+        os.environ.pop("PALISADE_FORCE_HTTPS", None)
+        importlib.reload(appmod)
+        db.reset_for_tests()

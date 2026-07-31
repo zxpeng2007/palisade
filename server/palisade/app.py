@@ -9,12 +9,13 @@ the browser socket at /ws either way.
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.exceptions import HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from palisade import db, rules, ws
@@ -38,6 +39,26 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Palisade", docs_url=None, redoc_url=None, lifespan=lifespan)
+
+# Session cookies are marked Secure in production, so a visitor who arrives
+# over plain http would sign in and appear to be ignored -- the browser simply
+# drops the cookie. Redirect instead. Requires --proxy-headers so the scheme
+# reflects the client's connection to the edge, not the tunnel's to us.
+FORCE_HTTPS = os.environ.get("PALISADE_FORCE_HTTPS", "") not in ("", "0")
+
+
+@app.middleware("http")
+async def https_redirect(request: Request, call_next):
+    # Only requests that actually came through the proxy are redirected, and
+    # the forwarded header is read directly rather than trusting uvicorn's
+    # --proxy-headers flag to be set. A request with no forwarded scheme
+    # reached the loopback socket directly -- a local bot or a health check --
+    # and must be left alone; redirecting those sends them to https://127.0.0.1,
+    # where nothing is listening.
+    if FORCE_HTTPS and request.headers.get("x-forwarded-proto") == "http":
+        return RedirectResponse(
+            str(request.url.replace(scheme="https")), status_code=308)
+    return await call_next(request)
 
 
 @app.exception_handler(HTTPException)
