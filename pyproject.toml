@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "palisade"
+version = "0.1.0"
+description = "Self-hostable arena for the wall game: humans and engines, with a lichess-style bot API."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "numpy>=1.26",
+    # The rules engine. Not on PyPI; install from the engine repo:
+    #   pip install git+https://github.com/zxpeng2007/quoridor-alphazero.git
+    # or, for development, an editable install of a local clone.
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+bot = ["httpx>=0.27"]
+
+[tool.setuptools]
+package-dir = { "" = "server" }
+
+[tool.setuptools.packages.find]
+where = ["server"]
+
+[tool.pytest.ini_options]
+testpaths = ["server/tests"]
