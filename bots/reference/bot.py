@@ -51,7 +51,7 @@ class Engine:
     LEAF = 32
     # Only a floor, for the case where the calibration below is somehow
     # unusable. The real starting rate is measured on this machine at startup.
-    MIN_SIMS_PER_SEC = 200.0
+    MIN_SIMS_PER_SEC = 50.0
 
     def __init__(self, checkpoint: str, device: str, max_sims: int,
                  think_seconds: float):
