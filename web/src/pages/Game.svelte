@@ -55,11 +55,10 @@
     return `${min}+${c.increment}`;
   }
 
-  function seatTime(seat: 'first' | 'second'): number | null {
-    if (!state) return null;
-    const t = seat === 'first' ? state.p1time : state.p2time;
-    return t === null || t === undefined ? null : t;
-  }
+  // Reactive on `state`: a plain seatTime(top) call in the template would
+  // only re-run when `top` changes, freezing both clocks for the whole game.
+  $: topTime = state ? ((top === 'first' ? state.p1time : state.p2time) ?? null) : null;
+  $: bottomTime = state ? ((bottom === 'first' ? state.p1time : state.p2time) ?? null) : null;
 
   function applyState(s: any, lg: string[] | null) {
     state = s;
@@ -177,7 +176,7 @@
           {/if}
         </div>
         <Clock
-          time={seatTime(top)}
+          time={topTime}
           running={active && moverSeat === (top === 'first' ? 0 : 1)}
         />
       </div>
@@ -214,7 +213,7 @@
           {/if}
         </div>
         <Clock
-          time={seatTime(bottom)}
+          time={bottomTime}
           running={active && moverSeat === (bottom === 'first' ? 0 : 1)}
         />
       </div>

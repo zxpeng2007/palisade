@@ -55,7 +55,10 @@ Two mechanisms, one account model:
   `bot: true` is displayed with a BOT tag and may only be upgraded while it
   has no rated games.
 
-All endpoints accept either mechanism unless noted.
+All endpoints accept either mechanism except token management (`POST` and
+`GET /api/token`), which requires a session — a bearer token can never mint
+another token. `POST /api/register` and `POST /api/login` are rate-limited
+per client address (burst 5); expect 429 under automation.
 
 ## REST endpoints
 
@@ -137,6 +140,15 @@ remaining, measured at send time.
 `timeout`, or `abort`.
 
 Anyone may stream any game (spectating); only the players may post moves.
+Streaming a game that is already over yields a single `gameFull` (with
+`p1time`/`p2time` `null` — archived games have no clocks) and then closes.
+Acting on a finished game returns 400; a game id that never existed, 404.
+If the server restarts, games that were in flight are recorded as `aborted`
+with no rating change.
+
+A stream may also end without a final state if the server had to sever a
+slow consumer. Treat any unexpected close the same way: reconnect and
+resync from the first line.
 
 ## WebSocket (web clients)
 
@@ -153,12 +165,19 @@ Client → server:
 
 Server → client:
 `{"t":"lobby","seeks":[...],"games":[...],"bots":[...]}` (snapshot on subscribe, then re-sent on change) ·
+`{"t":"gameFull", ...}` (on game subscribe: the same shape as the HTTP
+`gameFull`, with `state.legal` included when it is your turn) ·
 `{"t":"gameStart","game":{...}}` · `{"t":"challenge",...}` ·
 `{"t":"state","game":"xyz789", ...same fields as gameState..., "legal":["e2","he1",...]}` ·
 `{"t":"err","msg":"..."}`
 
 `legal` is present only when it is the receiving player's turn — the full
 legal token list, so clients need no rules implementation.
+
+Move submissions over the socket share the same per-account rate limit as
+the HTTP endpoint. A socket may hold at most 32 channel subscriptions, and
+the server may close a socket that stops draining (code 1013) — reconnect
+and re-subscribe.
 
 ## Writing a bot
 

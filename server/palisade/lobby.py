@@ -9,6 +9,7 @@ clears the lobby, which is the correct behaviour.
 from __future__ import annotations
 
 import secrets
+import time
 from dataclasses import dataclass, field
 from random import Random
 
@@ -18,6 +19,9 @@ from palisade.events import hub, online_ids
 from palisade.games import Player, manager
 
 _rng = Random()
+
+CHALLENGE_TTL = 120.0      # seconds before an unanswered challenge lapses
+MAX_OPEN_CHALLENGES = 5    # per challenger
 
 VALID_INITIAL = range(60, 3601)
 VALID_INCREMENT = range(0, 61)
@@ -55,6 +59,7 @@ class Challenge:
     initial: int
     increment: int
     color: str  # random | first | second, challenger's seat
+    created: float = field(default_factory=time.monotonic)
 
     def public(self) -> dict:
         return {"id": self.id, "challenger": self.challenger.username,
@@ -71,7 +76,13 @@ class Lobby:
     # -- seeks --------------------------------------------------------------
 
     def add_seek(self, player: Player, rated: bool, initial: int, increment: int):
-        """Match instantly if a compatible seek waits, else park it."""
+        """Match instantly if a compatible seek waits, else park it.
+
+        A new seek always replaces the poster's previous one — including on an
+        instant match, where leaving the old seek parked would let a single
+        account stack games it never asked for.
+        """
+        self.seeks.pop(player.id, None)
         for uid, s in list(self.seeks.items()):
             if (uid != player.id and s.rated == rated
                     and s.initial == initial and s.increment == increment):
@@ -91,12 +102,24 @@ class Lobby:
 
     # -- challenges ---------------------------------------------------------
 
+    def _sweep(self) -> None:
+        cutoff = time.monotonic() - CHALLENGE_TTL
+        for cid in [c for c, ch in self.challenges.items() if ch.created < cutoff]:
+            ch = self.challenges.pop(cid)
+            hub.publish(f"user:{ch.dest.id}",
+                        {"type": "challengeCanceled", "challenge": ch.public()})
+
     def challenge(self, challenger: Player, dest: Player, rated: bool,
                   initial: int, increment: int, color: str) -> Challenge:
+        self._sweep()
         if color not in ("random", "first", "second"):
             raise HTTPException(400, "color must be random, first, or second")
         if dest.id == challenger.id:
             raise HTTPException(400, "you cannot challenge yourself")
+        open_count = sum(1 for c in self.challenges.values()
+                         if c.challenger.id == challenger.id)
+        if open_count >= MAX_OPEN_CHALLENGES:
+            raise HTTPException(429, "too many open challenges")
         ch = Challenge(secrets.token_urlsafe(6), challenger, dest, rated,
                        initial, increment, color)
         self.challenges[ch.id] = ch
@@ -104,6 +127,7 @@ class Lobby:
         return ch
 
     def _take(self, challenge_id: str, user_id: int, who: str) -> Challenge:
+        self._sweep()
         ch = self.challenges.get(challenge_id)
         if ch is None:
             raise HTTPException(404, "no such challenge")

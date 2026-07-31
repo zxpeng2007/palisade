@@ -138,6 +138,10 @@ class LiveGame:
             if rules.winner(self.st) >= 0:
                 self._finish(winner=seat, reason="mate")
             else:
+                # Persist the move list as it grows, so a crash or restart
+                # loses at most presentation state, never the game record.
+                db.execute("UPDATE games SET moves = ? WHERE id = ?",
+                           (",".join(self.moves), self.id))
                 self._arm_timer()
                 self._broadcast()
 
@@ -196,11 +200,20 @@ class LiveGame:
         self._announce_end()
 
     def _apply_ratings(self) -> tuple[float, float]:
+        # Re-read both ratings at finish time. The Player objects are snapshots
+        # from game creation; an account can have several games or challenges
+        # outstanding, and computing from a stale snapshot then writing the
+        # result absolutely would erase every result that landed in between.
+        # This read-compute-write has no await points, so it cannot interleave
+        # with another game's finish on the event loop.
         a, b = self.players
+        ra = db.one("SELECT rating, rd, vol FROM users WHERE id = ?", (a.id,))
+        rb = db.one("SELECT rating, rd, vol FROM users WHERE id = ?", (b.id,))
         score1 = 1.0 if self.winner == 0 else 0.0
         (r1, rd1, v1), (r2, rd2, v2) = glicko2.duel(
-            a.rating, a.rd, a.vol, b.rating, b.rd, b.vol, score1)
-        d1, d2 = r1 - a.rating, r2 - b.rating
+            ra["rating"], ra["rd"], ra["vol"],
+            rb["rating"], rb["rd"], rb["vol"], score1)
+        d1, d2 = r1 - ra["rating"], r2 - rb["rating"]
         db.execute(
             "UPDATE users SET rating=?, rd=?, vol=?, rated_games=rated_games+1 WHERE id=?",
             (r1, rd1, v1, a.id))

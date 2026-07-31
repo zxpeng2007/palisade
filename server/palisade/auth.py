@@ -104,3 +104,16 @@ def require(request: Request, scope: str | None = None) -> dict:
     if scope and scope not in scopes:
         raise HTTPException(403, f"token lacks the '{scope}' scope")
     return user
+
+
+def require_session(request: Request) -> dict:
+    """Cookie-session auth only. Token management uses this so a leaked or
+    limited token can never mint further tokens (scope escalation)."""
+    sid = request.cookies.get(SESSION_COOKIE)
+    if sid:
+        row = db.one("SELECT user_id FROM sessions WHERE token = ?", (sid,))
+        if row:
+            user = _user_by_id(row["user_id"])
+            if user:
+                return user
+    raise HTTPException(401, "a logged-in session is required to manage tokens")

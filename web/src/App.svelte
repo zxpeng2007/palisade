@@ -17,8 +17,14 @@
     const h = hash.replace(/^#/, '') || '/';
     let m: RegExpMatchArray | null;
     if ((m = h.match(/^\/game\/([^/]+)$/))) return { page: 'game', id: m[1] };
-    if ((m = h.match(/^\/@\/([^/]+)$/)))
-      return { page: 'profile', name: decodeURIComponent(m[1]) };
+    if ((m = h.match(/^\/@\/([^/]+)$/))) {
+      // A malformed percent-escape in a pasted URL must not crash the app.
+      try {
+        return { page: 'profile', name: decodeURIComponent(m[1]) };
+      } catch {
+        return { page: 'lobby' };
+      }
+    }
     if (h === '/login') return { page: 'login' };
     return { page: 'lobby' };
   }

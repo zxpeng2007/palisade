@@ -4,19 +4,33 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
+import os
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
-from palisade import auth, db, rules
-from palisade.events import hub, presence_dec, presence_inc
+from palisade import auth, db, limits, rules
+from palisade.events import hub, is_closed, presence_dec, presence_inc
 from palisade.games import GameError, Player, SEAT_NAMES, manager
 from palisade.lobby import check_clock, lobby
 
 router = APIRouter(prefix="/api")
 
 KEEPALIVE = 6.0
+# Cookies are httponly+lax always; Secure is opt-in because a LAN deployment
+# over plain http would otherwise lose its session cookie silently.
+COOKIE_SECURE = os.environ.get("PALISADE_SECURE_COOKIES", "") not in ("", "0")
+COOKIE_MAX_AGE = 30 * 24 * 3600
+
+
+def _client_key(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _set_session(response: Response, sid: str) -> None:
+    response.set_cookie(auth.SESSION_COOKIE, sid, httponly=True,
+                        samesite="lax", secure=COOKIE_SECURE,
+                        max_age=COOKIE_MAX_AGE)
 
 
 def _player(user: dict) -> Player:
@@ -45,24 +59,28 @@ async def _body(request: Request) -> dict:
 
 @router.post("/register")
 async def register(request: Request, response: Response):
+    if not limits.credentials.take(_client_key(request)):
+        raise HTTPException(429, "too many attempts; wait a moment")
     data = await _body(request)
     username = str(data.get("username", ""))
     password = str(data.get("password", ""))
-    user_id = auth.create_user(username, password)
+    # scrypt costs ~100ms by design; run it off the event loop.
+    user_id = await asyncio.to_thread(auth.create_user, username, password)
     sid = auth.create_session(user_id)
-    response.set_cookie(auth.SESSION_COOKIE, sid, httponly=True,
-                        samesite="lax", max_age=180 * 24 * 3600)
+    _set_session(response, sid)
     return _account_json({"id": user_id})
 
 
 @router.post("/login")
 async def login(request: Request, response: Response):
+    if not limits.credentials.take(_client_key(request)):
+        raise HTTPException(429, "too many attempts; wait a moment")
     data = await _body(request)
-    user = auth.check_login(str(data.get("username", "")),
-                            str(data.get("password", "")))
+    user = await asyncio.to_thread(
+        auth.check_login, str(data.get("username", "")),
+        str(data.get("password", "")))
     sid = auth.create_session(user["id"])
-    response.set_cookie(auth.SESSION_COOKIE, sid, httponly=True,
-                        samesite="lax", max_age=180 * 24 * 3600)
+    _set_session(response, sid)
     return _account_json(user)
 
 
@@ -92,7 +110,9 @@ async def bot_upgrade(request: Request):
 
 @router.post("/token")
 async def token_create(request: Request):
-    user = auth.require(request)
+    # Session-only: if a bearer token could mint tokens, any leaked or
+    # narrowly-scoped token could escalate itself to full scopes.
+    user = auth.require_session(request)
     data = await _body(request)
     name = str(data.get("name", "token"))[:60]
     scopes = data.get("scopes", ["play"])
@@ -103,7 +123,7 @@ async def token_create(request: Request):
 
 @router.get("/token")
 async def token_list(request: Request):
-    user = auth.require(request)
+    user = auth.require_session(request)
     rows = db.query(
         "SELECT name, scopes, created FROM tokens WHERE user_id = ? ORDER BY created",
         (user["id"],))
@@ -192,27 +212,6 @@ async def seek_cancel(request: Request):
 
 # -- playing ----------------------------------------------------------------
 
-class _Buckets:
-    """Token bucket per account: burst 20, ~10 moves/second sustained."""
-
-    def __init__(self, burst: float = 20.0, rate: float = 10.0):
-        self.burst, self.rate = burst, rate
-        self.state: dict[int, tuple[float, float]] = {}
-
-    def take(self, key: int) -> bool:
-        level, at = self.state.get(key, (self.burst, time.monotonic()))
-        now = time.monotonic()
-        level = min(self.burst, level + (now - at) * self.rate)
-        if level < 1.0:
-            self.state[key] = (level, now)
-            return False
-        self.state[key] = (level - 1.0, now)
-        return True
-
-
-_buckets = _Buckets()
-
-
 def _db_game_full(game_id: str) -> dict | None:
     g = db.one(
         """SELECT g.*, u1.username AS p1name, u1.is_bot AS p1bot,
@@ -221,18 +220,23 @@ def _db_game_full(game_id: str) -> dict | None:
            WHERE g.id = ?""", (game_id,))
     if g is None:
         return None
+    moves = g["moves"].split(",") if g["moves"] else []
     state = {
         "type": "gameState", "moves": g["moves"],
+        "view": rules.view(rules.replay(moves)),
         "p1time": None, "p2time": None, "status": g["status"],
         "winner": SEAT_NAMES[g["winner"]] if g["winner"] is not None else None,
         "reason": g["reason"],
     }
+    def _r(x):
+        return round(x) if x is not None else None
+
     return {
         "type": "gameFull", "id": g["id"], "rated": bool(g["rated"]),
         "clock": {"initial": g["initial"], "increment": g["increment"]},
-        "first": {"username": g["p1name"], "rating": round(g["p1_rating"]),
+        "first": {"username": g["p1name"], "rating": _r(g["p1_rating"]),
                   "bot": bool(g["p1bot"]), "delta": g["p1_delta"]},
-        "second": {"username": g["p2name"], "rating": round(g["p2_rating"]),
+        "second": {"username": g["p2name"], "rating": _r(g["p2_rating"]),
                    "bot": bool(g["p2bot"]), "delta": g["p2_delta"]},
         "state": state,
     }
@@ -262,6 +266,8 @@ async def game_stream(game_id: str):
                 try:
                     msg = await asyncio.wait_for(q.get(), KEEPALIVE)
                 except asyncio.TimeoutError:
+                    if is_closed(q):
+                        return
                     yield "\n"
                     continue
                 yield json.dumps(msg) + "\n"
@@ -283,22 +289,25 @@ async def game_get(game_id: str):
     full = _db_game_full(game_id)
     if full is None:
         raise HTTPException(404, "no such game")
-    moves = full["state"]["moves"]
-    full["view"] = rules.view(rules.replay(moves.split(",") if moves else []))
+    full["view"] = full["state"]["view"]
     return full
 
 
 def _live_game(game_id: str):
     game = manager.get(game_id)
     if game is None:
-        raise HTTPException(404, "no such live game")
+        # A finished game is "over", not "missing" — the contract promises a
+        # 400 for acting on it, and bots key their game-loop exit off that.
+        if db.one("SELECT 1 FROM games WHERE id = ?", (game_id,)):
+            raise HTTPException(400, "the game is over")
+        raise HTTPException(404, "no such game")
     return game
 
 
 @router.post("/game/{game_id}/move/{token}")
 async def game_move(game_id: str, token: str, request: Request):
     user = auth.require(request, "play")
-    if not _buckets.take(user["id"]):
+    if not limits.moves.take(user["id"]):
         raise HTTPException(429, "slow down")
     try:
         await _live_game(game_id).move(user["id"], token)
@@ -343,6 +352,11 @@ async def event_stream(request: Request):
                 try:
                     msg = await asyncio.wait_for(q.get(), KEEPALIVE)
                 except asyncio.TimeoutError:
+                    if is_closed(q):
+                        # The hub severed this subscriber (queue overflow).
+                        # End the stream so the client reconnects and resyncs
+                        # instead of listening to keepalives forever.
+                        return
                     yield "\n"
                     continue
                 yield json.dumps(msg) + "\n"

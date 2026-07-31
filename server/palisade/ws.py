@@ -19,10 +19,14 @@ import json
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from palisade import auth, db
-from palisade.events import hub, presence_dec, presence_inc
+from palisade import auth, db, limits
+from palisade.events import hub, is_closed, presence_dec, presence_inc
 from palisade.games import GameError, Player, manager
 from palisade.lobby import check_clock, lobby
+
+# Channels one socket may hold open: lobby + a handful of games is normal use;
+# anything past this is a subscription-exhaustion attempt.
+MAX_CHANNELS = 32
 
 
 def _ws_user(ws: WebSocket) -> dict | None:
@@ -71,19 +75,33 @@ class Connection:
     async def _pump(self, channel: str, q: asyncio.Queue):
         try:
             while True:
-                msg = await q.get()
+                try:
+                    msg = await asyncio.wait_for(q.get(), 6.0)
+                except asyncio.TimeoutError:
+                    if is_closed(q):
+                        # Severed by the hub for not draining. Close the whole
+                        # socket: the client auto-reconnects and replays its
+                        # subscriptions, which resyncs every channel at once.
+                        await self.ws.close(code=1013)
+                        return
+                    continue
                 out = self._translate(channel, msg)
                 if out is not None:
                     await self.out.put(out)
+        except Exception:
+            pass
         finally:
             hub.unsubscribe(channel, q)
 
-    def subscribe(self, channel: str):
+    def subscribe(self, channel: str) -> bool:
         if channel in self.pumps:
-            return
+            return True
+        if len(self.pumps) >= MAX_CHANNELS:
+            return False
         q = hub.subscribe(channel)
         self.pumps[channel] = asyncio.get_running_loop().create_task(
             self._pump(channel, q))
+        return True
 
     def unsubscribe(self, channel: str):
         task = self.pumps.pop(channel, None)
@@ -110,6 +128,7 @@ async def _initial_game_msg(conn: Connection, game_id: str):
 async def handle(ws: WebSocket):
     await ws.accept()
     user = _ws_user(ws)
+    sid = ws.cookies.get(auth.SESSION_COOKIE)
     conn = Connection(ws, user)
     sender = asyncio.get_running_loop().create_task(conn.send_task())
     if user:
@@ -120,6 +139,12 @@ async def handle(ws: WebSocket):
     def player() -> Player:
         fresh = db.one("SELECT * FROM users WHERE id = ?", (user["id"],))
         return Player.from_row(dict(fresh))
+
+    def session_live() -> bool:
+        # The cookie is only read at the handshake; re-check before every
+        # mutating action so logout actually revokes an open socket.
+        return sid is not None and db.one(
+            "SELECT 1 FROM sessions WHERE token = ?", (sid,)) is not None
 
     try:
         while True:
@@ -132,19 +157,31 @@ async def handle(ws: WebSocket):
             try:
                 if t == "sub":
                     ch = str(data.get("ch", ""))
+                    ok = True
                     if ch == "lobby":
-                        conn.subscribe("lobby")
-                        snap = lobby.snapshot()
-                        await conn.out.put({"t": "lobby", **{
-                            k: v for k, v in snap.items() if k != "type"}})
+                        ok = conn.subscribe("lobby")
+                        if ok:
+                            snap = lobby.snapshot()
+                            await conn.out.put({"t": "lobby", **{
+                                k: v for k, v in snap.items() if k != "type"}})
                     elif ch.startswith("game:"):
-                        conn.subscribe(ch)
-                        await _initial_game_msg(conn, ch[5:])
+                        ok = conn.subscribe(ch)
+                        if ok:
+                            await _initial_game_msg(conn, ch[5:])
+                    if not ok:
+                        await conn.out.put(
+                            {"t": "err", "msg": "too many subscriptions"})
                 elif t == "unsub":
                     conn.unsubscribe(str(data.get("ch", "")))
                 elif user is None:
                     await conn.out.put({"t": "err", "msg": "sign in to play"})
+                elif not session_live():
+                    await conn.out.put({"t": "err", "msg": "signed out"})
+                    await ws.close(code=1008)
+                    return
                 elif t == "move":
+                    if not limits.moves.take(user["id"]):
+                        raise GameError("slow down")
                     await manager_action(
                         data, "move", user["id"], str(data.get("move", "")))
                 elif t == "resign":

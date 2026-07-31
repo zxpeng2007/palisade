@@ -99,3 +99,12 @@ def execute(sql: str, args: tuple = ()) -> int:
         cur = conn.execute(sql, args)
         conn.commit()
         return cur.lastrowid
+
+
+def run(sql: str, args: tuple = ()) -> int:
+    """Like execute, but returns the affected row count."""
+    with _lock:
+        conn = connect()
+        cur = conn.execute(sql, args)
+        conn.commit()
+        return cur.rowcount

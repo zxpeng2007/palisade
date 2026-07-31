@@ -24,6 +24,15 @@ from palisade.api import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.connect()
+    # Reconcile games interrupted by the previous shutdown: their live state
+    # is gone, so the honest outcome is an abort (never a rating change).
+    # Without this the rows sit 'active' forever, invisible on profiles and
+    # wedging any bot that streams them waiting for a result.
+    n = db.run("""UPDATE games SET status = 'aborted', reason = 'abort',
+                  finished = datetime('now') WHERE status = 'active'""")
+    if n:
+        print(f"palisade: aborted {n} game(s) interrupted by restart")
+    db.run("DELETE FROM sessions WHERE created < datetime('now', '-30 days')")
     rules.warmup()
     yield
 
