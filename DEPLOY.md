@@ -68,3 +68,36 @@ The database is the only stateful thing. Stop the server, copy it with
 sqlite's backup API rather than copying the file (WAL mode keeps recent
 writes in a sidecar), then restart. Games interrupted by a restart are
 reconciled to `aborted` at startup, with no rating change.
+
+## The murus.net deployment, concretely
+
+A 2 vCPU / 2 GB Hetzner box running Ubuntu, everything under a `palisade`
+user, three systemd units: `palisade` (server), `palisade-tunnel`, and
+`palisade-bot`. Reboot-tested end to end — the site answers again about fifty
+seconds after `reboot`.
+
+Four things were not obvious in advance:
+
+**The distribution Python was too new.** Ubuntu 26.04 ships Python 3.14, which
+has no wheels yet for numba or torch, and numba is not optional — it is the
+rules engine. `uv python install 3.12` pins a known-good interpreter without
+touching the system one.
+
+**Install CPU torch explicitly.** `--index-url https://download.pytorch.org/whl/cpu`
+keeps the venv near 1 GB; the default CUDA build is far larger and useless
+without a GPU. Add swap before installing on a 2 GB box.
+
+**`web/dist` is gitignored**, so a fresh clone serves the API and a placeholder
+instead of the site. Either install Node on the host and build there, or build
+locally and copy `web/dist` across. The server picks it up automatically.
+
+**The bot measures its own speed.** Search throughput spans two orders of
+magnitude between a discrete GPU (~22k simulations a second) and a shared
+vCPU (~300), so the bot calibrates at startup rather than trusting a constant.
+On this host that is about 1,500 simulations per move at a 6 second budget.
+Give it both cores (`OMP_NUM_THREADS=2`) with `Nice=5` so the server still
+wins any contention.
+
+Hardening is ufw with SSH only — the tunnel is outbound, so nothing else needs
+to be reachable — plus key-only SSH and unattended upgrades. `ss -tlnp` should
+show the arena bound to `127.0.0.1:8000` and nothing else public.
