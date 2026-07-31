@@ -49,11 +49,9 @@ class Engine:
     # time, leaf_batch 1024 loses heavily to 32 despite searching ~1.5x more
     # nodes; 32 is the setting that actually wins games.
     LEAF = 32
-    # Starting guess for end-to-end search throughput, refined from real
-    # timings as the game goes on. Seeded at the opening-position rate (the
-    # slow end): overshooting spends clock that cannot be recovered, while
-    # undershooting only costs a little depth on the first move or two.
-    SIMS_PER_SEC = 22000
+    # Only a floor, for the case where the calibration below is somehow
+    # unusable. The real starting rate is measured on this machine at startup.
+    MIN_SIMS_PER_SEC = 200.0
 
     def __init__(self, checkpoint: str, device: str, max_sims: int,
                  think_seconds: float):
@@ -69,11 +67,25 @@ class Engine:
                                 leaf_batch=self.LEAF)
         self.max_sims = max_sims
         self.think_seconds = think_seconds
-        self.rate = float(self.SIMS_PER_SEC)
-        # Capture the CUDA graph and compile the search kernels now, while no
-        # clock is running. Without this the cost lands on the first move of
-        # the first game, which then overruns its time budget by ~a second.
-        self.mcts.search(fr.initial_state().reshape(1, -1), 2048)
+
+        # Warm up and calibrate in one step, while no clock is running. The
+        # first search also compiles the njit kernels and captures the CUDA
+        # graph, so it is timed separately from the measurement that follows.
+        #
+        # The rate is measured rather than assumed because it spans two orders
+        # of magnitude across the hardware this bot legitimately runs on: a
+        # discrete GPU manages ~22k simulations a second, a shared vCPU a few
+        # hundred. A constant tuned on one is badly wrong on the other, and
+        # wrong in the dangerous direction -- overshooting the clock. Seeding
+        # from a real measurement makes the bot correct anywhere without a
+        # flag anyone has to remember to set.
+        start = fr.initial_state().reshape(1, -1)
+        self.mcts.search(start, 512)                      # compile / capture
+        probe = 2048
+        t0 = time.perf_counter()
+        self.mcts.search(start, probe)
+        dt = time.perf_counter() - t0
+        self.rate = max(self.MIN_SIMS_PER_SEC, probe / dt if dt > 0 else 0.0)
 
     def sims_for(self, clock: float | None) -> int:
         """Simulations to fit the target think time, backed off in time trouble.
@@ -417,6 +429,9 @@ def main() -> None:
     log(f"engine: {m.get('checkpoint', args.checkpoint)} "
         f"(gen {m.get('iteration', '?')}, {m.get('elo', 0):+.0f} Elo internal, "
         f"device {engine.device})")
+    log(f"calibrated at {engine.rate:,.0f} sims/s -> about "
+        f"{min(args.max_sims, int(args.think * engine.rate)):,} sims per move "
+        f"at a {args.think:.1f}s budget")
 
     bot = Bot(args, engine)
     bot.verify_account()
