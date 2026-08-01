@@ -74,9 +74,29 @@ async def websocket(socket: WebSocket):
     await ws.handle(socket)
 
 
+class _SpaFiles(StaticFiles):
+    """Static files with the cache policy a hashed-asset build needs.
+
+    Vite fingerprints everything under /assets, so those files are immutable
+    and can be cached for a year. index.html names them, so it must never be
+    cached: a browser holding yesterday's index.html asks for yesterday's
+    bundle and a deploy silently fails to reach anyone who has visited before.
+    """
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        # Starlette normalises with os.sep, so this is "assets/x.js" on the
+        # server and "assets\\x.js" when the suite runs on Windows.
+        if path.replace("\\", "/").startswith("assets/"):
+            response.headers["cache-control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["cache-control"] = "no-cache"
+        return response
+
+
 _dist = Path(__file__).resolve().parents[2] / "web" / "dist"
 if _dist.is_dir():
-    app.mount("/", StaticFiles(directory=str(_dist), html=True), name="web")
+    app.mount("/", _SpaFiles(directory=str(_dist), html=True), name="web")
 else:
     @app.get("/")
     async def root():

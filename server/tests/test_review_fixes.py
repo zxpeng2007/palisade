@@ -217,3 +217,35 @@ def test_https_redirect_when_forced(tmp_path, monkeypatch):
         os.environ.pop("PALISADE_FORCE_HTTPS", None)
         importlib.reload(appmod)
         db.reset_for_tests()
+
+
+def test_spa_cache_headers(tmp_path):
+    """index.html must not be cached; fingerprinted assets should be.
+
+    A browser holding an old index.html requests the old bundle by name, so a
+    deploy silently fails to reach anyone who has visited before -- which is
+    exactly what happened after one deploy here.
+    """
+    import os
+    import importlib
+    from fastapi.testclient import TestClient
+
+    os.environ["PALISADE_DB"] = str(tmp_path / "spa.db")
+    db.reset_for_tests()
+    import palisade.app as appmod
+    dist = appmod.Path(appmod.__file__).resolve().parents[2] / "web" / "dist"
+    if not (dist / "index.html").exists():
+        pytest.skip("web client not built in this checkout")
+    importlib.reload(appmod)
+    try:
+        with TestClient(appmod.app) as c:
+            r = c.get("/")
+            assert r.status_code == 200
+            assert r.headers["cache-control"] == "no-cache"
+            asset = next(p for p in (dist / "assets").iterdir() if p.suffix == ".js")
+            r = c.get(f"/assets/{asset.name}")
+            assert r.status_code == 200
+            assert "immutable" in r.headers["cache-control"]
+    finally:
+        importlib.reload(appmod)
+        db.reset_for_tests()
