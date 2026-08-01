@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { api } from './api';
 import { reconnect } from './ws';
 
@@ -34,6 +34,14 @@ export async function register(
 ): Promise<void> {
   account.set(await api('POST', '/api/register', { username, password }));
   reconnect();
+}
+
+/** Guard for actions that need an account: routes to sign-in and returns true
+ *  when the caller should bail out. Spectating stays open to everyone. */
+export function needSignIn(): boolean {
+  if (get(account)) return false;
+  location.hash = '#/login';
+  return true;
 }
 
 export async function logout(): Promise<void> {

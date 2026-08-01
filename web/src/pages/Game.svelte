@@ -24,6 +24,9 @@
   let renderedPlies = 0;
 
   $: me = $account ? $account.username : null;
+  // Declared, not inferred: the board's `color` prop is a union, and a bare
+  // reactive ternary widens to string.
+  let myColor: 'first' | 'second' | null = null;
   $: myColor =
     full && me
       ? full.first.username === me

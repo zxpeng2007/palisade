@@ -102,6 +102,15 @@ h2 {
   letter-spacing: 0.07em;
 }
 
+/* Inline literals: endpoint paths, move tokens, field names. */
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86em;
+  background: var(--surface-2);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);

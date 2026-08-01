@@ -1,5 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import {
+    CELL,
+    FILES,
+    M,
+    SIZE,
+    SPAN,
+    STEP,
+    isWall,
+    squareXY,
+    wallCross,
+    wallGeom,
+  } from './geometry';
 
   // The view object from API.md: {p1, p2, wallsH, wallsV, wallsLeft, turn}
   export let view: any;
@@ -9,13 +21,6 @@
   export let color: 'first' | 'second' | null = null;
   export let onMove: (token: string) => void = () => {};
 
-  const FILES = 'abcdefghi';
-  const CELL = 50;
-  const GAP = 10; // wall thickness = the gutter between cells
-  const M = 28; // margin for coordinate labels
-  const STEP = CELL + GAP;
-  const SPAN = 9 * CELL + 8 * GAP;
-  const SIZE = SPAN + 2 * M;
   const HIT = 36; // wall-anchor hit square, centered on the cross point
   const GRID = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -30,36 +35,9 @@
   $: myTurn = legal !== null;
   $: if (legal === null) ghost = null;
 
-  // -- geometry -------------------------------------------------------------
-  // file a = column 0 = left edge from Player 1's view; rank 1 = Player 1's
-  // home rank, drawn at the bottom unless flipped.
-
-  function squareXY(token: string, flip: boolean) {
-    const f = FILES.indexOf(token[0]);
-    const r = +token[1] - 1;
-    return { x: M + f * STEP, y: M + (flip ? r : 8 - r) * STEP };
-  }
-
-  // h<file><rank>: on the edge between <rank> and <rank>+1, spanning files
-  // <file> and <file>+1. v<file><rank>: on the edge between <file> and
-  // <file>+1, spanning ranks <rank> and <rank>+1.
-  function wallGeom(token: string, flip: boolean) {
-    const f = FILES.indexOf(token[1]);
-    const r = +token[2] - 1; // the lower of the two ranks touching the wall
-    const topY = M + (flip ? r : 7 - r) * STEP; // screen-top cell of the pair
-    if (token[0] === 'h') {
-      return { x: M + f * STEP, y: topY + CELL, w: 2 * CELL + GAP, h: GAP };
-    }
-    return { x: M + f * STEP + CELL, y: topY, w: GAP, h: 2 * CELL + GAP };
-  }
-
-  // Pawn destinations are 2 chars ("e2"); wall tokens are 3 ("hd3"). Testing
-  // the first character is not enough: "h4" is a pawn move to file h.
-  function isWall(token: string): boolean {
-    return token.length === 3;
-  }
-
   // -- derived render lists -------------------------------------------------
+  // Geometry lives in ./geometry so the notation diagram in engine mode is
+  // drawn by the same code as the board.
 
   $: pawns = [
     { seat: 1, ...squareXY(view.p1, flip) },
@@ -78,16 +56,7 @@
     ? []
     : (legal ?? [])
         .filter((t) => isWall(t) && t[0] === orientation)
-        .map((t) => {
-          const f = FILES.indexOf(t[1]);
-          const r = +t[2] - 1;
-          const topY = M + (flip ? r : 7 - r) * STEP;
-          return {
-            token: t,
-            cx: M + f * STEP + CELL + GAP / 2,
-            cy: topY + CELL + GAP / 2,
-          };
-        });
+        .map((t) => ({ token: t, ...wallCross(t, flip) }));
 
   $: ghostGeom = ghost !== null ? wallGeom(ghost, flip) : null;
 
