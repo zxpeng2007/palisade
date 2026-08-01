@@ -11,15 +11,15 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-import palisade.db as db
+import murus.db as db
 
 
 @pytest.fixture(scope="module")
 def client(tmp_path_factory, module_mocker=None):
     import os
-    os.environ["PALISADE_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
+    os.environ["MURUS_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
     db.reset_for_tests()
-    from palisade.app import app
+    from murus.app import app
     with TestClient(app) as c:
         yield c
 
@@ -41,7 +41,7 @@ def token_for(client, name, scopes=("play", "bot")):
     r = client.post("/api/token", json={"name": "t", "scopes": list(scopes)})
     assert r.status_code == 200
     tok = r.json()["token"]
-    assert tok.startswith("pal_")
+    assert tok.startswith("mur_")
     client.cookies.clear()
     return {"Authorization": f"Bearer {tok}"}
 
@@ -168,7 +168,7 @@ def test_lazy_timeout(client):
         "clock": {"initial": 60, "increment": 0}, "color": "first"})
     gid = client.post(f"/api/challenge/{r.json()['challenge']['id']}/accept",
                       headers=h2).json()["game"]["id"]
-    from palisade.games import manager
+    from murus.games import manager
     game = manager.get(gid)
     game.remaining[0] = 0.05
     time.sleep(0.2)

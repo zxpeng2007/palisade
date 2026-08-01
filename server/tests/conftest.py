@@ -6,7 +6,7 @@ from one client, so it is opened wide here. The moves bucket keeps its real
 values — no test comes near 10 moves/second.
 """
 
-from palisade import limits
+from murus import limits
 
 limits.credentials.burst = 100000.0
 limits.credentials.rate = 100000.0

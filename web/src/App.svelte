@@ -105,7 +105,7 @@
 </script>
 
 <header>
-  <a class="brand" href={modeHash($mode)}>palisade<span class="brand-dot">.</span></a>
+  <a class="brand" href={modeHash($mode)}>murus<span class="brand-dot">.</span></a>
   <nav>
     {#if $account}
       <a href={'#/@/' + $account.username}>{$account.username}</a>

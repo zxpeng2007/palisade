@@ -1,13 +1,13 @@
-"""Reference bot: an AlphaZero engine on a Palisade server, via the public API.
+"""Reference bot: an AlphaZero engine on a Murus server, via the public API.
 
-This is the palisade analogue of lichess-bot and doubles as the house bot. It
+This is the murus analogue of lichess-bot and doubles as the house bot. It
 talks to the server exclusively through the HTTP API described in API.md:
 account events arrive on /api/stream/event, each game is followed on
 /api/game/stream/{id}, and moves go back as plain POSTs. Positions are rebuilt
 by replaying the move list through the rules engine, so the bot never trusts
 its own bookkeeping over the server's.
 
-    export PALISADE_TOKEN=pal_...
+    export MURUS_TOKEN=mur_...
     python bot.py --checkpoint /path/to/best.pt --seek 300+3
 
 One game at a time: challenges received while playing are declined, and any
@@ -35,7 +35,7 @@ from quoridor import fastrules as fr
 from quoridor.mcts import BatchedMCTS
 from quoridor.net import NetEvaluator, load_checkpoint
 
-from palisade.notation import legal_token_map, square_token, wall_token
+from murus.notation import legal_token_map, square_token, wall_token
 
 REST_TIMEOUT = 15.0
 
@@ -211,7 +211,7 @@ class Bot:
     def verify_account(self) -> None:
         r = self.http.get("/api/account")
         if r.status_code == 401:
-            sys.exit("token rejected by the server (401): check --token / PALISADE_TOKEN")
+            sys.exit("token rejected by the server (401): check --token / MURUS_TOKEN")
         r.raise_for_status()
         acct = r.json()
         self.username = acct["username"]
@@ -433,10 +433,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--server", default="http://localhost:8000",
-                    help="palisade server base URL (default %(default)s)")
-    ap.add_argument("--token", default=os.environ.get("PALISADE_TOKEN"),
+                    help="murus server base URL (default %(default)s)")
+    ap.add_argument("--token", default=os.environ.get("MURUS_TOKEN"),
                     help="API token with the play scope "
-                         "(default: env PALISADE_TOKEN)")
+                         "(default: env MURUS_TOKEN)")
     ap.add_argument("--checkpoint", required=True,
                     help="torch checkpoint for the network")
     ap.add_argument("--think", type=float, default=3.0,
@@ -457,7 +457,7 @@ def main() -> None:
     args = ap.parse_args()
 
     if not args.token:
-        sys.exit("no API token: pass --token or set PALISADE_TOKEN")
+        sys.exit("no API token: pass --token or set MURUS_TOKEN")
 
     log("loading engine...")
     engine = Engine(args.checkpoint, args.device, args.max_sims, args.think)

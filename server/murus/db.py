@@ -143,7 +143,7 @@ def connect(path: str | None = None) -> sqlite3.Connection:
     global _conn
     if _conn is not None:
         return _conn
-    path = path or os.environ.get("PALISADE_DB", "palisade.db")
+    path = path or os.environ.get("MURUS_DB", "murus.db")
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")

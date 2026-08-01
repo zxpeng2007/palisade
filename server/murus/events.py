@@ -39,12 +39,12 @@ class Hub:
             # Mark before dropping so the consumer can tell "quiet" from
             # "severed" on its next poll and terminate; a silent drop would
             # leave the stream serving keepalives from a dead queue forever.
-            q.palisade_closed = True
+            q.murus_closed = True
             self.unsubscribe(key, q)
 
 
 def is_closed(q: asyncio.Queue) -> bool:
-    return getattr(q, "palisade_closed", False)
+    return getattr(q, "murus_closed", False)
 
 
 hub = Hub()

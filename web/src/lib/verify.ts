@@ -11,7 +11,7 @@ import { api } from './api';
 import { refresh } from './session';
 
 const COOLDOWN_MS = 60_000;
-const KEY = 'palisade.resendUntil';
+const KEY = 'murus.resendUntil';
 
 /** Seconds left before another verification mail may be requested. */
 export const cooldown = writable(0);

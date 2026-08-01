@@ -12,7 +12,7 @@ import numpy as np
 
 from quoridor import fastrules as fr
 
-from palisade.notation import FILES, legal_token_map, square_token, wall_token
+from murus.notation import FILES, legal_token_map, square_token, wall_token
 
 
 class IllegalMove(ValueError):

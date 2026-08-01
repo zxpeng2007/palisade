@@ -11,7 +11,7 @@
   import Seeks from '../lib/Seeks.svelte';
   import TopGames from '../lib/TopGames.svelte';
 
-  const REPO = 'https://github.com/zxpeng2007/palisade';
+  const REPO = 'https://github.com/zxpeng2007/murus';
 
   let seeks: any[] = [];
   let bots: any[] = [];
@@ -35,11 +35,11 @@
   const MINT = `curl -sX POST https://murus.net/api/token \\
   -H 'Content-Type: application/json' -b bot.cookies \\
   -d '{"name":"laptop","scopes":["play","bot"]}'
-# {"token":"pal_..."}`;
+# {"token":"mur_..."}`;
 
   const BOT = `import json, httpx
 
-SERVER, TOKEN = "https://murus.net", "pal_..."      # the token from step 3
+SERVER, TOKEN = "https://murus.net", "mur_..."      # the token from step 3
 c = httpx.Client(base_url=SERVER, timeout=None,
                  headers={"Authorization": f"Bearer {TOKEN}"})
 
@@ -248,7 +248,7 @@ for ev in lines("/api/stream/event"):
         </div>
         <p class="dim foot">
           Errors are <code>{'{"error": "reason"}'}</code> with a 4xx status.
-          Authenticate with <code>Authorization: Bearer pal_…</code>. Moves are
+          Authenticate with <code>Authorization: Bearer mur_…</code>. Moves are
           rate-limited per account (burst 20, about 10/s).
         </p>
       </div>

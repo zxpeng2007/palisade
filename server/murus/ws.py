@@ -19,10 +19,10 @@ import json
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from palisade import auth, db, limits
-from palisade.events import hub, is_closed, presence_dec, presence_inc
-from palisade.games import GameError, Player, manager
-from palisade.lobby import check_clock, lobby
+from murus import auth, db, limits
+from murus.events import hub, is_closed, presence_dec, presence_inc
+from murus.games import GameError, Player, manager
+from murus.lobby import check_clock, lobby
 
 # Channels one socket may hold open: lobby + a handful of games is normal use;
 # anything past this is a subscription-exhaustion attempt.

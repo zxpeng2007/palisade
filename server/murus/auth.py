@@ -2,7 +2,7 @@
 
 Passwords: scrypt from the standard library, per-user 16-byte salt.
 Sessions: opaque random id in an httponly cookie, stored server-side.
-API tokens: ``pal_`` + 32 hex chars, only the SHA-256 stored at rest, scopes
+API tokens: ``mur_`` + 32 hex chars, only the SHA-256 stored at rest, scopes
 comma-joined. Verification tokens work the same way — random, hashed at rest,
 single use — because a mail link is a credential like any other.
 Nothing here ever logs or returns a secret after creation.
@@ -17,10 +17,10 @@ import sqlite3
 
 from fastapi import HTTPException, Request
 
-from palisade import db
+from murus import db
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_-]{2,20}$")
-SESSION_COOKIE = "palisade_sid"
+SESSION_COOKIE = "murus_sid"
 
 # Conservative on purpose: a local part of the ordinary characters, dotted
 # labels, and a real alphabetic TLD. We would rather turn away an exotic but
@@ -196,7 +196,7 @@ def create_token(user_id: int, name: str, scopes: list[str]) -> str:
     allowed = {"play", "bot"}
     if not scopes or not set(scopes) <= allowed:
         raise HTTPException(400, f"scopes must be a non-empty subset of {sorted(allowed)}")
-    plaintext = "pal_" + secrets.token_hex(16)
+    plaintext = "mur_" + secrets.token_hex(16)
     db.execute(
         "INSERT INTO tokens (hash, user_id, name, scopes) VALUES (?, ?, ?, ?)",
         (hashlib.sha256(plaintext.encode()).hexdigest(), user_id, name, ",".join(scopes)),

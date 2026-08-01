@@ -6,9 +6,9 @@ person to try again; a queue we would have to drain is not worth owning for one
 message type.
 
 Environment:
-    PALISADE_MAIL_FROM   the From: header, e.g. ``Palisade <hello@murus.net>``
-    PALISADE_RESEND_KEY  Resend API key. Absent → console mode, below.
-    PALISADE_BASE_URL    where links point (default https://murus.net)
+    MURUS_MAIL_FROM   the From: header, e.g. ``Murus <hello@murus.net>``
+    MURUS_RESEND_KEY  Resend API key. Absent → console mode, below.
+    MURUS_BASE_URL    where links point (default https://murus.net)
 
 Console mode is how development and the test suite run: with no key the message
 is printed to stdout, link and all, and recorded in :data:`outbox`. It is loud
@@ -56,11 +56,11 @@ def _console_safe(text: str) -> str:
 
 
 def base_url() -> str:
-    return (os.environ.get("PALISADE_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
+    return (os.environ.get("MURUS_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
 
 
 def console_mode() -> bool:
-    return not os.environ.get("PALISADE_RESEND_KEY", "").strip()
+    return not os.environ.get("MURUS_RESEND_KEY", "").strip()
 
 
 def verification_link(token: str) -> str:
@@ -72,13 +72,13 @@ def verification_link(token: str) -> str:
 def _bodies(username: str, token: str, changed: bool) -> tuple[str, str]:
     link = verification_link(token)
     opening = (
-        "You asked to move your Palisade account to this address."
+        "You asked to move your Murus account to this address."
         if changed else
-        "Someone — hopefully you — signed up to Palisade with this address."
+        "Someone — hopefully you — signed up to Murus with this address."
     )
     text = f"""Hi {username},
 
-{opening} Palisade is the wall-game arena at {base_url()}, where people and
+{opening} Murus is the wall-game arena at {base_url()}, where people and
 engines play on one ladder.
 
 Confirm the address by following this link:
@@ -92,11 +92,11 @@ things waiting behind it.
 If none of this means anything to you, just ignore this mail. Nothing is
 attached to your address until the link is used.
 
-— Palisade
+— Murus
 """
     safe_link = html.escape(link, quote=True)
     body = f"""<p>Hi {html.escape(username)},</p>
-<p>{html.escape(opening)} Palisade is the wall-game arena at
+<p>{html.escape(opening)} Murus is the wall-game arena at
 {html.escape(base_url())}, where people and engines play on one ladder.</p>
 <p><a href="{safe_link}">Confirm this address</a> — the link works once, and
 for 24 hours.</p>
@@ -104,7 +104,7 @@ for 24 hours.</p>
 games and engine accounts are the only things waiting behind it.</p>
 <p>If none of this means anything to you, just ignore this mail. Nothing is
 attached to your address until the link is used.</p>
-<p>— Palisade</p>
+<p>— Murus</p>
 <p style="color:#888;font-size:12px">If the link does not open, paste this into
 your browser:<br>{safe_link}</p>
 """
@@ -115,25 +115,25 @@ async def send_verification(to: str, username: str, token: str,
                             changed: bool = False) -> None:
     """Send one verification link, or raise :class:`MailError` trying."""
     text, body = _bodies(username, token, changed)
-    subject = ("Confirm your new Palisade address" if changed
-               else "Confirm your address for Palisade")
+    subject = ("Confirm your new Murus address" if changed
+               else "Confirm your address for Murus")
     await _send(to, subject, text, body)
 
 
 async def _send(to: str, subject: str, text: str, body: str) -> None:
-    key = os.environ.get("PALISADE_RESEND_KEY", "").strip()
+    key = os.environ.get("MURUS_RESEND_KEY", "").strip()
     if not key:
         print(_console_safe(
-            f"[palisade mail] console mode: no PALISADE_RESEND_KEY, so this "
+            f"[murus mail] console mode: no MURUS_RESEND_KEY, so this "
             f"message was not sent. To: {to}\nSubject: {subject}\n{text}"),
             flush=True)
         _record(to, subject, text, body, console=True)
         return
 
-    sender = os.environ.get("PALISADE_MAIL_FROM", "").strip()
+    sender = os.environ.get("MURUS_MAIL_FROM", "").strip()
     if not sender:
         # Resend rejects an unverified sender anyway; failing here says why.
-        raise MailError("PALISADE_RESEND_KEY is set but PALISADE_MAIL_FROM is not")
+        raise MailError("MURUS_RESEND_KEY is set but MURUS_MAIL_FROM is not")
 
     # Imported here so a deployment that never leaves console mode does not
     # need an HTTP client installed at all, and so a missing one is a 502 on

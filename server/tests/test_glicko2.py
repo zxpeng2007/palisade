@@ -1,6 +1,6 @@
 """Glicko-2 against the worked example in Glickman's paper (2013 revision)."""
 
-from palisade import glicko2
+from murus import glicko2
 
 
 def test_paper_example():

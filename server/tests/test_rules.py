@@ -2,8 +2,8 @@
 
 import pytest
 
-from palisade import rules
-from palisade.notation import legal_token_map, parse_wall, square_token, wall_token
+from murus import rules
+from murus.notation import legal_token_map, parse_wall, square_token, wall_token
 from quoridor import fastrules as fr
 
 # A complete ranked game from the wild (barricade.gg qj4ec3, 2026-07-31),

@@ -32,26 +32,26 @@ import numpy as np
 
 from quoridor import fastrules as fr
 
-from palisade import db, rules
-from palisade.notation import legal_token_map, square_token, wall_token
+from murus import db, rules
+from murus.notation import legal_token_map, square_token, wall_token
 
 # Where the production server keeps the network it publishes reviews with.
 # Both env vars are honoured so a box that already runs the house bot needs no
 # second copy, while a reviewer strong enough to be worth quoting can still be
 # pointed at separately.
-DEFAULT_CHECKPOINT = "/home/palisade/run/gen-010.pt"
+DEFAULT_CHECKPOINT = "/home/murus/run/gen-010.pt"
 DEFAULT_SIMS = 600
 
 
 def checkpoint_path() -> str:
-    return (os.environ.get("PALISADE_REVIEW_CHECKPOINT")
-            or os.environ.get("PALISADE_BOT_CHECKPOINT")
+    return (os.environ.get("MURUS_REVIEW_CHECKPOINT")
+            or os.environ.get("MURUS_BOT_CHECKPOINT")
             or DEFAULT_CHECKPOINT)
 
 
 def configured_sims() -> int:
     try:
-        return max(1, int(os.environ.get("PALISADE_REVIEW_SIMS", DEFAULT_SIMS)))
+        return max(1, int(os.environ.get("MURUS_REVIEW_SIMS", DEFAULT_SIMS)))
     except ValueError:
         return DEFAULT_SIMS
 
@@ -176,7 +176,7 @@ class _Engine:
                 f"this server has no analysis engine installed ({exc})") from exc
         if not os.path.exists(path):
             raise EngineUnavailable(
-                f"no engine checkpoint at {path}; set PALISADE_REVIEW_CHECKPOINT "
+                f"no engine checkpoint at {path}; set MURUS_REVIEW_CHECKPOINT "
                 f"to one this server has")
         # Leave a core for everything else. The same box serves the site and
         # usually runs the house bot, which is in the middle of a real game
@@ -407,7 +407,7 @@ async def _worker() -> None:
             # worker that dies takes every future review with it.
             await asyncio.to_thread(run, game_id)
         except Exception as exc:
-            print(f"palisade: review worker error on {game_id}: {exc!r}", flush=True)
+            print(f"murus: review worker error on {game_id}: {exc!r}", flush=True)
         finally:
             queue.task_done()
 
@@ -463,7 +463,7 @@ def _touch(game_id: str, **fields) -> None:
 
 
 def _fail(game_id: str, message: str) -> None:
-    print(f"palisade: review of {game_id} failed: {message}", flush=True)
+    print(f"murus: review of {game_id} failed: {message}", flush=True)
     _touch(game_id, status="failed", error=message)
 
 
@@ -502,5 +502,5 @@ def run(game_id: str) -> None:
            engine=result["engine"], sims=result["sims"],
            result=json.dumps({"accuracy": result["accuracy"],
                               "moves": result["moves"]}))
-    print(f"palisade: reviewed {game_id}, {len(moves)} plies in "
+    print(f"murus: reviewed {game_id}, {len(moves)} plies in "
           f"{time.monotonic() - started:.1f}s", flush=True)

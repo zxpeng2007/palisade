@@ -5,7 +5,7 @@
   // Dismissal is remembered per account for the browser session only: rated
   // play stays blocked until the address is confirmed, so the reminder is due
   // again next visit, but it should not follow you around all afternoon.
-  const KEY = 'palisade.verifyDismissed';
+  const KEY = 'murus.verifyDismissed';
 
   let dismissedFor = read();
   let changing = false;

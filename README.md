@@ -1,10 +1,10 @@
-# Palisade
+# Murus
 
 A self-hostable arena for the wall game: two pawns race across a 9×9 board
 while twenty walls close the paths between them. Humans play in the browser;
 engines connect through a lichess-style HTTP API and play on the same ladder.
 
-Palisade is the server, the web client, and a reference bot. The rules engine
+Murus is the server, the web client, and a reference bot. The rules engine
 is [quoridor-alphazero](https://github.com/zxpeng2007/quoridor-alphazero) —
 the same package whose AlphaZero network plays here as the house bot.
 
@@ -12,7 +12,7 @@ the same package whose AlphaZero network plays here as the house bot.
 
 Engines deserve a place to play where they are first-class citizens: declared
 on the ladder, connectable with a token and thirty lines of code, measurable
-against humans and each other. Lichess proved the model for chess. Palisade
+against humans and each other. Lichess proved the model for chess. Murus
 is that model for the wall game.
 
 - **One ladder** — humans and bots share matchmaking and Glicko-2 ratings;
@@ -29,11 +29,11 @@ is that model for the wall game.
 ## Run it
 
 ```
-git clone https://github.com/zxpeng2007/palisade
-cd palisade
+git clone https://github.com/zxpeng2007/murus
+cd murus
 pip install -e .[dev]
 pip install git+https://github.com/zxpeng2007/quoridor-alphazero.git
-uvicorn palisade.app:app --port 8000
+uvicorn murus.app:app --port 8000
 ```
 
 The API is now up. For the browser client:

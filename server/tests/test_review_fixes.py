@@ -8,15 +8,15 @@ alone.
 import pytest
 from fastapi.testclient import TestClient
 
-import palisade.db as db
+import murus.db as db
 
 
 @pytest.fixture(scope="module")
 def client(tmp_path_factory):
     import os
-    os.environ["PALISADE_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
+    os.environ["MURUS_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
     db.reset_for_tests()
-    from palisade.app import app
+    from murus.app import app
     with TestClient(app) as c:
         yield c
 
@@ -105,7 +105,7 @@ def test_token_minting_requires_session(client):
 def test_matching_seek_clears_your_parked_seek(client):
     """Finding: a match removed only the waiting player's seek, so the
     incoming player's earlier seek stayed parked and stacked games."""
-    from palisade.lobby import lobby
+    from murus.lobby import lobby
     h1 = token_for(client, "walt")
     h2 = token_for(client, "xena")
     client.post("/api/seek", headers=h2,
@@ -145,7 +145,7 @@ def test_moves_persisted_before_game_ends(client):
 def test_restart_reconciliation(tmp_path):
     """Finding: rows left 'active' by a dead process were stuck forever."""
     import os
-    os.environ["PALISADE_DB"] = str(tmp_path / "reboot.db")
+    os.environ["MURUS_DB"] = str(tmp_path / "reboot.db")
     db.reset_for_tests()
     conn = db.connect()
     conn.execute("INSERT INTO users (id, username, pw_hash, salt) "
@@ -154,7 +154,7 @@ def test_restart_reconciliation(tmp_path):
                  "status, moves) VALUES ('stuckgame', 1, 2, 1, 300, 3, "
                  "'active', 'e2,e8')")
     conn.commit()
-    from palisade.app import app
+    from murus.app import app
     with TestClient(app) as c:
         body = c.get("/api/game/stuckgame").json()
         assert body["state"]["status"] == "aborted"
@@ -167,7 +167,7 @@ def test_restart_reconciliation(tmp_path):
 def test_cf_connecting_ip_buckets(client, monkeypatch):
     """Behind Cloudflare every TCP peer is the proxy; the credential rate
     limit must key on CF-Connecting-IP or one hot address locks out everyone."""
-    from palisade import api, limits
+    from murus import api, limits
 
     monkeypatch.setattr(api, "TRUST_CF_IP", True)
     monkeypatch.setattr(limits.credentials, "burst", 2.0)
@@ -193,11 +193,11 @@ def test_https_redirect_when_forced(tmp_path, monkeypatch):
     """Secure cookies are dropped by browsers on plain http, so an http
     visitor must be redirected rather than silently failing to sign in."""
     import os
-    os.environ["PALISADE_DB"] = str(tmp_path / "https.db")
-    os.environ["PALISADE_FORCE_HTTPS"] = "1"
+    os.environ["MURUS_DB"] = str(tmp_path / "https.db")
+    os.environ["MURUS_FORCE_HTTPS"] = "1"
     db.reset_for_tests()
     import importlib
-    import palisade.app as appmod
+    import murus.app as appmod
     importlib.reload(appmod)
     try:
         with TestClient(appmod.app, base_url="http://testserver") as c:
@@ -214,7 +214,7 @@ def test_https_redirect_when_forced(tmp_path, monkeypatch):
             r = c.get("/api/user/nobody", follow_redirects=False)
             assert r.status_code == 404
     finally:
-        os.environ.pop("PALISADE_FORCE_HTTPS", None)
+        os.environ.pop("MURUS_FORCE_HTTPS", None)
         importlib.reload(appmod)
         db.reset_for_tests()
 
@@ -230,9 +230,9 @@ def test_spa_cache_headers(tmp_path):
     import importlib
     from fastapi.testclient import TestClient
 
-    os.environ["PALISADE_DB"] = str(tmp_path / "spa.db")
+    os.environ["MURUS_DB"] = str(tmp_path / "spa.db")
     db.reset_for_tests()
-    import palisade.app as appmod
+    import murus.app as appmod
     dist = appmod.Path(appmod.__file__).resolve().parents[2] / "web" / "dist"
     if not (dist / "index.html").exists():
         pytest.skip("web client not built in this checkout")

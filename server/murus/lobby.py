@@ -15,9 +15,9 @@ from random import Random
 
 from fastapi import HTTPException
 
-from palisade import speed
-from palisade.events import hub, online_ids
-from palisade.games import Player, manager
+from murus import speed
+from murus.events import hub, online_ids
+from murus.games import Player, manager
 
 _rng = Random()
 
@@ -160,7 +160,7 @@ class Lobby:
     # -- snapshots ----------------------------------------------------------
 
     def snapshot(self) -> dict:
-        from palisade import db
+        from murus import db
         online = online_ids()
         bots = []
         if online:

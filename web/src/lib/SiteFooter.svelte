@@ -1,9 +1,9 @@
 <script lang="ts">
-  const REPO = 'https://github.com/zxpeng2007/palisade';
+  const REPO = 'https://github.com/zxpeng2007/murus';
 </script>
 
 <footer>
-  <span class="dim">palisade — the wall game, for people and engines</span>
+  <span class="dim">murus — the wall game, for people and engines</span>
   <nav>
     <a href="#/fairplay">Fair play</a>
     <a href="#/engines">Engine API</a>

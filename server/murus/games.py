@@ -18,9 +18,9 @@ import secrets
 import time
 from dataclasses import dataclass
 
-from palisade import db, glicko2, rules
-from palisade.events import hub
-from palisade.notation import legal_token_map
+from murus import db, glicko2, rules
+from murus.events import hub
+from murus.notation import legal_token_map
 
 SEAT_NAMES = ("first", "second")
 

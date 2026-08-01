@@ -3,7 +3,7 @@
   // root. Written out as markup rather than parsed at runtime: it is one
   // document that changes a few times a year, and it deserves to be typeset
   // rather than dumped.
-  const REPO = 'https://github.com/zxpeng2007/palisade';
+  const REPO = 'https://github.com/zxpeng2007/murus';
   const UPDATED = '1 August 2026';
 </script>
 

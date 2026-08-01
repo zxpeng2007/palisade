@@ -28,7 +28,7 @@ export const PRESETS = [
   { label: '15+10', initial: 900, increment: 10 },
 ];
 
-/** "5+3" — the same rendering as palisade.speed.label on the server. */
+/** "5+3" — the same rendering as murus.speed.label on the server. */
 export function clockLabel(c: Clock): string {
   if (!c) return '';
   const minutes = c.initial / 60;

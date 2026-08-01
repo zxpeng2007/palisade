@@ -1,6 +1,6 @@
 """Email verification: registration, links, the rated-play gate, migration.
 
-The suite runs in console mode — no PALISADE_RESEND_KEY — so every message
+The suite runs in console mode — no MURUS_RESEND_KEY — so every message
 lands in ``mail.outbox`` and the link can be read back out of it, which is
 also how a developer works. Sessions are carried as explicit Cookie headers so
 one TestClient can hold several identities without a shared jar.
@@ -16,8 +16,8 @@ import sys
 import pytest
 from fastapi.testclient import TestClient
 
-import palisade.db as db
-from palisade import auth, mail
+import murus.db as db
+from murus import auth, mail
 
 PASSWORD = "hunter22valid"
 # Seeks pair up on the time control, so the one test that parks a seek uses a
@@ -32,9 +32,9 @@ SCRIPT = ["e2", "ha1", "e3", "d9", "e4", "e9", "e5", "d9",
 @pytest.fixture(scope="module")
 def client(tmp_path_factory):
     import os
-    os.environ["PALISADE_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
+    os.environ["MURUS_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
     db.reset_for_tests()
-    from palisade.app import app
+    from murus.app import app
     with TestClient(app) as c:
         yield c
 
@@ -303,15 +303,15 @@ def test_resend_api_call_and_its_failures(monkeypatch):
             return StubResponse(*reply)
 
     monkeypatch.setattr(httpx, "AsyncClient", StubClient)
-    monkeypatch.setenv("PALISADE_RESEND_KEY", "re_pretend_secret")
-    monkeypatch.setenv("PALISADE_MAIL_FROM", "Palisade <hello@murus.net>")
+    monkeypatch.setenv("MURUS_RESEND_KEY", "re_pretend_secret")
+    monkeypatch.setenv("MURUS_MAIL_FROM", "Murus <hello@murus.net>")
     mail.outbox.clear()
 
     asyncio.run(mail.send_verification("her@example.test", "her", "tok"))
     assert seen["url"] == mail.RESEND_ENDPOINT
     assert seen["timeout"] == mail.TIMEOUT
     assert seen["headers"]["Authorization"] == "Bearer re_pretend_secret"
-    assert seen["json"]["from"] == "Palisade <hello@murus.net>"
+    assert seen["json"]["from"] == "Murus <hello@murus.net>"
     assert seen["json"]["to"] == ["her@example.test"]
     assert "/#/verify/tok" in seen["json"]["text"]
     assert "/#/verify/tok" in seen["json"]["html"]
@@ -328,7 +328,7 @@ def test_resend_api_call_and_its_failures(monkeypatch):
     # A key with no sender address is a misconfiguration, and saying so beats
     # letting the provider reject every message for a reason nobody reads.
     reply = (200, "{}")
-    monkeypatch.delenv("PALISADE_MAIL_FROM")
+    monkeypatch.delenv("MURUS_MAIL_FROM")
     with pytest.raises(mail.MailError):
         asyncio.run(mail.send_verification("her@example.test", "her", "tok"))
 
@@ -345,9 +345,9 @@ def test_console_copy_survives_a_narrow_stdout(monkeypatch):
 
 
 def test_base_url_drives_the_link(monkeypatch):
-    monkeypatch.setenv("PALISADE_BASE_URL", "http://localhost:8000/")
+    monkeypatch.setenv("MURUS_BASE_URL", "http://localhost:8000/")
     assert mail.verification_link("abc") == "http://localhost:8000/#/verify/abc"
-    monkeypatch.delenv("PALISADE_BASE_URL")
+    monkeypatch.delenv("MURUS_BASE_URL")
     assert mail.verification_link("abc").startswith("https://murus.net/")
 
 
@@ -368,7 +368,7 @@ CREATE TABLE users (
 );
 """
 LEGACY_USERS = [("Selina", 0, 1500.0), ("zhehanz", 0, 1643.0),
-                ("Admin", 0, 1500.0), ("PalisadeBot", 1, 1712.0)]
+                ("Admin", 0, 1500.0), ("MurusBot", 1, 1712.0)]
 
 
 def test_migration_grandfathers_existing_accounts(tmp_path, monkeypatch):
@@ -381,7 +381,7 @@ def test_migration_grandfathers_existing_accounts(tmp_path, monkeypatch):
     old.commit()
     old.close()
 
-    monkeypatch.setenv("PALISADE_DB", str(path))
+    monkeypatch.setenv("MURUS_DB", str(path))
     db.reset_for_tests()
     try:
         def accounts():

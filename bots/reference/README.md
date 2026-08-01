@@ -1,7 +1,7 @@
 # Reference bot
 
-The palisade equivalent of lichess-bot: a single-file client (`bot.py`) that
-connects an AlphaZero engine to a Palisade server through the public HTTP API
+The murus equivalent of lichess-bot: a single-file client (`bot.py`) that
+connects an AlphaZero engine to a Murus server through the public HTTP API
 only — no server internals, no rules re-implementation. It also runs as the
 house bot.
 
@@ -10,8 +10,8 @@ house bot.
 Requires Python 3.11+ and a checkpoint trained by the engine repo.
 
 ```sh
-# 1. The palisade package (used only for move notation).
-pip install -e /path/to/palisade
+# 1. The murus package (used only for move notation).
+pip install -e /path/to/murus
 
 # 2. The rules engine + network (the `quoridor` package).
 pip install git+https://github.com/zxpeng2007/quoridor-alphazero.git
@@ -46,7 +46,7 @@ curl -b jar.txt -X POST http://localhost:8000/api/bot/upgrade
 curl -b jar.txt -H 'Content-Type: application/json' \
      -d '{"name":"reference-bot","scopes":["play","bot"]}' \
      http://localhost:8000/api/token
-# -> {"token":"pal_..."}
+# -> {"token":"mur_..."}
 
 rm jar.txt
 ```
@@ -54,7 +54,7 @@ rm jar.txt
 ## Running
 
 ```sh
-export PALISADE_TOKEN=pal_...        # or pass --token
+export MURUS_TOKEN=mur_...        # or pass --token
 python bot.py --server http://localhost:8000 \
               --checkpoint /path/to/checkpoints/best.pt \
               --seek 300+3

@@ -1,6 +1,6 @@
-# Palisade API
+# Murus API
 
-Palisade is an arena for the wall game: a 9×9 board, two pawns racing to the
+Murus is an arena for the wall game: a 9×9 board, two pawns racing to the
 opposite rank, twenty walls that block the way. Humans play in the browser;
 engines connect through the HTTP API below, modelled on the Lichess Bot API.
 Everything a browser can do, a bot can do with a token.
@@ -48,7 +48,7 @@ Two mechanisms, one account model:
 
 - **Session cookie** — `POST /api/register` or `POST /api/login`; used by the
   web client. Cookie is `httponly`.
-- **Bearer token** — `Authorization: Bearer pal_...`; used by bots and scripts.
+- **Bearer token** — `Authorization: Bearer mur_...`; used by bots and scripts.
   Create tokens while logged in via `POST /api/token`. The plaintext token is
   shown once. Tokens carry scopes: `play` (join and play games) and `bot`
   (accept challenges automatically-eligible account). An account with
@@ -73,7 +73,7 @@ Errors are JSON: `{"error": "human-readable reason"}` with a 4xx status.
 | POST | `/api/logout` | — | clears session |
 | GET  | `/api/account` | — | `{id, username, bot, rating, rd, games}` |
 | POST | `/api/bot/upgrade` | — | marks the account as a bot; only while 0 games played |
-| POST | `/api/token` | `{name, scopes: ["play","bot"]}` | → `{token: "pal_..."}` shown once |
+| POST | `/api/token` | `{name, scopes: ["play","bot"]}` | → `{token: "mur_..."}` shown once |
 | GET  | `/api/token` | — | list of `{name, scopes, created}` (no secrets) |
 | GET  | `/api/user/{username}` | — | public profile: rating, counts, recent games |
 
@@ -119,7 +119,7 @@ regardless of rating, since their numbers mean little.
 
 ```json
 {"kind":"bot","speed":null,"players":[
-  {"rank":1,"username":"PalisadeBot","rating":1712,"provisional":false,"bot":true,"games":38}
+  {"rank":1,"username":"MurusBot","rating":1712,"provisional":false,"bot":true,"games":38}
 ]}
 ```
 
@@ -208,7 +208,7 @@ An ndjson stream (one JSON object per line) of account-level events. Blank
 lines are keepalives; ignore them. Events:
 
 ```json
-{"type":"challenge","challenge":{"id":"abc123","challenger":"donked","destUser":"palisade-bot","rated":true,"clock":{"initial":300,"increment":3},"color":"random"}}
+{"type":"challenge","challenge":{"id":"abc123","challenger":"donked","destUser":"murus-bot","rated":true,"clock":{"initial":300,"increment":3},"color":"random"}}
 {"type":"challengeCanceled","challenge":{...}}
 {"type":"challengeDeclined","challenge":{...}}
 {"type":"gameStart","game":{"id":"xyz789","color":"first","opponent":{"username":"donked","rating":1775},"rated":true,"clock":{"initial":300,"increment":3}}}
@@ -224,7 +224,7 @@ lines are keepalives; ignore them. Events:
 ndjson. The first line is the full game; subsequent lines are state updates.
 
 ```json
-{"type":"gameFull","id":"xyz789","rated":true,"clock":{"initial":300,"increment":3},"first":{"username":"donked","rating":1775,"bot":false},"second":{"username":"palisade-bot","rating":1500,"bot":true},"state":{...}}
+{"type":"gameFull","id":"xyz789","rated":true,"clock":{"initial":300,"increment":3},"first":{"username":"donked","rating":1775,"bot":false},"second":{"username":"murus-bot","rating":1500,"bot":true},"state":{...}}
 {"type":"gameState","moves":"e2,e8,e3","view":{"p1":"e3","p2":"e8","wallsH":[],"wallsV":[],"wallsLeft":[10,10],"turn":2},"p1time":297.2,"p2time":301.4,"status":"active","winner":null,"reason":null}
 ```
 
@@ -269,7 +269,7 @@ Client → server:
 `{"t":"sub","ch":"lobby"}` · `{"t":"sub","ch":"game:xyz789"}` · `{"t":"unsub","ch":...}` ·
 `{"t":"move","game":"xyz789","move":"e2"}` · `{"t":"resign","game":...}` · `{"t":"abort","game":...}` ·
 `{"t":"seek","rated":true,"clock":{"initial":300,"increment":3}}` · `{"t":"seekCancel"}` ·
-`{"t":"challenge","user":"palisade-bot","rated":false,"clock":{...},"color":"random"}` ·
+`{"t":"challenge","user":"murus-bot","rated":false,"clock":{...},"color":"random"}` ·
 `{"t":"accept","id":...}` · `{"t":"decline","id":...}`
 
 Server → client:
@@ -298,7 +298,7 @@ and re-subscribe.
 import httpx, json
 
 S = "http://localhost:8000"
-H = {"Authorization": "Bearer pal_..."}
+H = {"Authorization": "Bearer mur_..."}
 
 with httpx.Client(base_url=S, headers=H, timeout=None) as c:
     with c.stream("GET", "/api/stream/event") as events:

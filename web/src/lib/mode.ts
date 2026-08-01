@@ -7,7 +7,7 @@ import { writable } from 'svelte/store';
  */
 export type Mode = 'humans' | 'engines';
 
-const KEY = 'palisade.mode';
+const KEY = 'murus.mode';
 
 function stored(): Mode {
   try {

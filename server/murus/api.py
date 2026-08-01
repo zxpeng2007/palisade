@@ -9,24 +9,24 @@ import os
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
-from palisade import auth, db, limits, mail, review, rules, speed
-from palisade.events import hub, is_closed, presence_dec, presence_inc
-from palisade.games import GameError, Player, SEAT_NAMES, manager
-from palisade.lobby import check_clock, lobby
+from murus import auth, db, limits, mail, review, rules, speed
+from murus.events import hub, is_closed, presence_dec, presence_inc
+from murus.games import GameError, Player, SEAT_NAMES, manager
+from murus.lobby import check_clock, lobby
 
 router = APIRouter(prefix="/api")
 
 KEEPALIVE = 6.0
 # Cookies are httponly+lax always; Secure is opt-in because a LAN deployment
 # over plain http would otherwise lose its session cookie silently.
-COOKIE_SECURE = os.environ.get("PALISADE_SECURE_COOKIES", "") not in ("", "0")
+COOKIE_SECURE = os.environ.get("MURUS_SECURE_COOKIES", "") not in ("", "0")
 COOKIE_MAX_AGE = 30 * 24 * 3600
 # Behind Cloudflare (tunnel or proxied DNS) every TCP peer is the proxy, so
 # rate limiting on request.client.host would put the whole internet in one
 # bucket. Cloudflare strips CF-Connecting-IP from client requests and sets it
 # to the real address, so it is trustworthy exactly when this flag says the
 # only way in is through Cloudflare (the server binds 127.0.0.1 either way).
-TRUST_CF_IP = os.environ.get("PALISADE_TRUST_CF_IP", "") not in ("", "0")
+TRUST_CF_IP = os.environ.get("MURUS_TRUST_CF_IP", "") not in ("", "0")
 # One verification mail a minute per account. A full bucket of one means the
 # first request always goes through and the next has to wait out the refill.
 resend_limit = limits.Buckets(burst=1.0, rate=1 / 60.0)
@@ -81,7 +81,7 @@ async def _mail_verification(user_id: int, username: str, email: str,
         # The provider's reason is for the operator's log; the response says
         # only that it did not go, so nothing about the account or the mail
         # infrastructure comes back over the wire.
-        print(f"palisade: verification mail to {email} failed: {e}", flush=True)
+        print(f"murus: verification mail to {email} failed: {e}", flush=True)
         raise
 
 

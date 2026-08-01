@@ -20,15 +20,15 @@ file is unique.
 import pytest
 from fastapi.testclient import TestClient
 
-import palisade.db as db
+import murus.db as db
 
 
 @pytest.fixture(scope="module")
 def client(tmp_path_factory):
     import os
-    os.environ["PALISADE_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
+    os.environ["MURUS_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
     db.reset_for_tests()
-    from palisade.app import app
+    from murus.app import app
     with TestClient(app) as c:
         yield c
 

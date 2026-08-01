@@ -99,7 +99,7 @@ a human account that you cannot have openly, immediately, and with a better
 opponent.
 
 Reports go to an issue on
-[the repository](https://github.com/zxpeng2007/palisade) or straight to the
+[the repository](https://github.com/zxpeng2007/murus) or straight to the
 operator. There is no appeals bureaucracy; there is a person reading them.
 And we would far rather answer a question than close an account — if you are
 unsure whether something is allowed (a training harness, a shared account for

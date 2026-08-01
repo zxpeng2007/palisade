@@ -1,9 +1,9 @@
 """Application assembly.
 
-    uvicorn palisade.app:app --host 0.0.0.0 --port 8000
+    uvicorn murus.app:app --host 0.0.0.0 --port 8000
 
-Environment: PALISADE_DB (sqlite path, default ./palisade.db),
-PALISADE_REVIEW_CHECKPOINT and PALISADE_REVIEW_SIMS (the engine game review
+Environment: MURUS_DB (sqlite path, default ./murus.db),
+MURUS_REVIEW_CHECKPOINT and MURUS_REVIEW_SIMS (the engine game review
 speaks for, and how hard it thinks). If web/dist exists (built SPA), it is
 served at the root; the API lives under /api and the browser socket at /ws
 either way.
@@ -21,8 +21,8 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from palisade import db, review, rules, ws
-from palisade.api import router
+from murus import db, review, rules, ws
+from murus.api import router
 
 
 @asynccontextmanager
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     n = db.run("""UPDATE games SET status = 'aborted', reason = 'abort',
                   finished = datetime('now') WHERE status = 'active'""")
     if n:
-        print(f"palisade: aborted {n} game(s) interrupted by restart")
+        print(f"murus: aborted {n} game(s) interrupted by restart")
     db.run("DELETE FROM sessions WHERE created < datetime('now', '-30 days')")
     rules.warmup()
     # One worker for the whole process, draining reviews one at a time; it also
@@ -52,13 +52,13 @@ async def lifespan(app: FastAPI):
         await asyncio.gather(reviewer, return_exceptions=True)
 
 
-app = FastAPI(title="Palisade", docs_url=None, redoc_url=None, lifespan=lifespan)
+app = FastAPI(title="Murus", docs_url=None, redoc_url=None, lifespan=lifespan)
 
 # Session cookies are marked Secure in production, so a visitor who arrives
 # over plain http would sign in and appear to be ignored -- the browser simply
 # drops the cookie. Redirect instead. Requires --proxy-headers so the scheme
 # reflects the client's connection to the edge, not the tunnel's to us.
-FORCE_HTTPS = os.environ.get("PALISADE_FORCE_HTTPS", "") not in ("", "0")
+FORCE_HTTPS = os.environ.get("MURUS_FORCE_HTTPS", "") not in ("", "0")
 
 
 @app.middleware("http")
@@ -114,4 +114,4 @@ if _dist.is_dir():
 else:
     @app.get("/")
     async def root():
-        return {"palisade": "API is up; web client not built (see web/README)"}
+        return {"murus": "API is up; web client not built (see web/README)"}

@@ -1,4 +1,4 @@
-# Running Palisade in production
+# Running Murus in production
 
 This is how murus.net is deployed: the arena runs on a home machine, and a
 Cloudflare tunnel publishes it. No ports are opened on the router and the
@@ -17,16 +17,16 @@ The server binds loopback deliberately: the tunnel is the only way in.
 
 | variable | purpose |
 |---|---|
-| `PALISADE_DB` | sqlite path; keep it outside the repository |
-| `PALISADE_SECURE_COOKIES=1` | mark session cookies Secure (HTTPS-only site) |
-| `PALISADE_TRUST_CF_IP=1` | rate-limit on `CF-Connecting-IP`, not the tunnel's address |
-| `PALISADE_FORCE_HTTPS=1` | redirect edge requests that arrived over http |
+| `MURUS_DB` | sqlite path; keep it outside the repository |
+| `MURUS_SECURE_COOKIES=1` | mark session cookies Secure (HTTPS-only site) |
+| `MURUS_TRUST_CF_IP=1` | rate-limit on `CF-Connecting-IP`, not the tunnel's address |
+| `MURUS_FORCE_HTTPS=1` | redirect edge requests that arrived over http |
 
 Run uvicorn with `--proxy-headers`. All four flags belong together: behind a
 proxy, every client looks like 127.0.0.1 unless the forwarded headers are
 trusted, and Secure cookies are silently dropped on plain http.
 
-Note that `PALISADE_FORCE_HTTPS` redirects only requests carrying
+Note that `MURUS_FORCE_HTTPS` redirects only requests carrying
 `X-Forwarded-Proto: http`. Direct loopback callers — a local bot, a health
 check — are left alone, since redirecting them points at `https://127.0.0.1`
 where nothing is listening.
@@ -71,9 +71,9 @@ reconciled to `aborted` at startup, with no rating change.
 
 ## The murus.net deployment, concretely
 
-A 2 vCPU / 2 GB Hetzner box running Ubuntu, everything under a `palisade`
-user, three systemd units: `palisade` (server), `palisade-tunnel`, and
-`palisade-bot`. Reboot-tested end to end — the site answers again about fifty
+A 2 vCPU / 2 GB Hetzner box running Ubuntu, everything under a `murus`
+user, three systemd units: `murus` (server), `murus-tunnel`, and
+`murus-bot`. Reboot-tested end to end — the site answers again about fifty
 seconds after `reboot`.
 
 Four things were not obvious in advance:

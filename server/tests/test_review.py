@@ -19,17 +19,17 @@ from fastapi.testclient import TestClient
 
 from quoridor import fastrules as fr
 
-import palisade.db as db
-from palisade import review, rules
-from palisade.notation import legal_token_map
+import murus.db as db
+from murus import review, rules
+from murus.notation import legal_token_map
 
 
 @pytest.fixture(scope="module")
 def client(tmp_path_factory):
     import os
-    os.environ["PALISADE_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
+    os.environ["MURUS_DB"] = str(tmp_path_factory.mktemp("db") / "test.db")
     db.reset_for_tests()
-    from palisade.app import app
+    from murus.app import app
     with TestClient(app) as c:
         yield c
 
@@ -252,7 +252,7 @@ def test_a_review_interrupted_by_a_restart_is_picked_up_again(client, monkeypatc
 def test_a_missing_engine_fails_the_review_and_not_the_server(client,
                                                               monkeypatch,
                                                               tmp_path):
-    monkeypatch.setenv("PALISADE_REVIEW_CHECKPOINT", str(tmp_path / "absent.pt"))
+    monkeypatch.setenv("MURUS_REVIEW_CHECKPOINT", str(tmp_path / "absent.pt"))
     gid = played_out(client, "noengine1", "noengine2")
     assert client.post(f"/api/game/{gid}/review").status_code == 200
     body = wait_for(client, gid, ("done", "failed"), timeout=60.0)
@@ -415,7 +415,7 @@ def _engine_present() -> bool:
 def test_a_full_review_with_the_real_engine(client, monkeypatch):
     # A short search: this test is about the engine being wired up correctly,
     # not about the quality of its opinions.
-    monkeypatch.setenv("PALISADE_REVIEW_SIMS", "48")
+    monkeypatch.setenv("MURUS_REVIEW_SIMS", "48")
     gid = played_out(client, "realengine1", "realengine2")
     assert client.post(f"/api/game/{gid}/review").status_code == 200
     body = wait_for(client, gid, ("done", "failed"), timeout=300.0)
