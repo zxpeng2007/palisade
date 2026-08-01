@@ -88,6 +88,24 @@
     return out;
   }
 
+  // -- board annotations ----------------------------------------------------
+  // What the review says about the move that produced the position on screen.
+  // Reviews exist only for finished games, so `finished` also keeps every one
+  // of these off a live board; a ply the review has nothing to say about —
+  // the start position, or one a partial result has not reached — leaves the
+  // board unmarked rather than carrying the previous ply's verdict forward.
+  $: shownMove =
+    finished && review && review.status === 'done' && review.moves && shownPly > 0
+      ? (review.moves.find((m) => m.ply === shownPly) ?? null)
+      : null;
+  $: playedToken = shownMove ? shownMove.move : null;
+  $: playedClass = shownMove ? shownMove.class : null;
+  // Nothing to correct when the player found the engine's move.
+  $: bestToken =
+    shownMove && shownMove.best && shownMove.best !== shownMove.move
+      ? shownMove.best
+      : null;
+
   function take(r: Review | null): void {
     if (!r) return;
     review = r;
@@ -297,7 +315,15 @@
 {:else}
   <div class="game">
     <div class="board-col">
-      <Board view={shownView} legal={boardLegal} color={myColor} onMove={play} />
+      <Board
+        view={shownView}
+        legal={boardLegal}
+        color={myColor}
+        onMove={play}
+        played={playedToken}
+        mark={playedClass}
+        best={bestToken}
+      />
 
       {#if canNavigate && latest > 0}
         <div class="scrub" class:behind={!atLatest}>

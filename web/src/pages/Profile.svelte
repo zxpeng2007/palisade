@@ -196,4 +196,24 @@
   .res.L {
     color: var(--danger);
   }
+
+  @media (max-width: 720px) {
+    .head h1 {
+      font-size: 1.25rem;
+    }
+    /* Three numbers with 36px between them is a desktop's spacing; on a phone
+       they share the width evenly instead of leaving a gap at the end. */
+    .stats {
+      gap: 0;
+      justify-content: space-between;
+    }
+    /* Each recent game is a link to that game, so the row is the target and
+       the row is a finger tall. */
+    td {
+      padding: 11px 8px 11px 0;
+    }
+    td a {
+      display: block;
+    }
+  }
 </style>

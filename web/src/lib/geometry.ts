@@ -63,3 +63,54 @@ export function wallCross(token: string, flip = false): { cx: number; cy: number
 export function isWall(token: string): boolean {
   return token.length === 3;
 }
+
+/** Slack outside the playing area that still counts as pointing at the board.
+ *  A fingertip that strays a millimetre into the coordinate margin is still
+ *  aiming at the wall it is nearly touching. */
+export const EDGE = 10;
+
+export interface CrossHit {
+  file: number; // anchor file, 0..7
+  rank: number; // anchor rank, 0..7 (0 is rank 1)
+  dx: number; // how far the point sits from the cross centre, board units
+  dy: number;
+  key: string; // identity of the cross, independent of which way it is drawn
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return n < lo ? lo : n > hi ? hi : n;
+}
+
+/** The wall cross nearest a point, and how far the point sits from it.
+ *
+ * Every wall hangs off a cross — the corner shared by four squares — so a
+ * point anywhere on the board has exactly one nearest wall anchor, and the
+ * leftover displacement is what says which of that cross's two walls the
+ * gesture is asking for. Null outside the board, where there is no sensible
+ * nearest cross and a drag should show no target rather than a wrong one.
+ */
+export function nearestCross(
+  x: number,
+  y: number,
+  flip = false
+): CrossHit | null {
+  if (x < M - EDGE || x > M + SPAN + EDGE) return null;
+  if (y < M - EDGE || y > M + SPAN + EDGE) return null;
+  // Crosses sit one CELL + half a gutter past each square's top-left corner,
+  // then every STEP after that; rounding lands on the nearest.
+  const file = clamp(Math.round((x - M - CELL - GAP / 2) / STEP), 0, 7);
+  const row = clamp(Math.round((y - M - CELL - GAP / 2) / STEP), 0, 7);
+  const rank = flip ? row : 7 - row;
+  return {
+    file,
+    rank,
+    dx: x - (M + file * STEP + CELL + GAP / 2),
+    dy: y - (M + row * STEP + CELL + GAP / 2),
+    key: `${file},${rank}`,
+  };
+}
+
+/** The token for one of a cross's two walls. */
+export function crossToken(c: CrossHit, orient: 'h' | 'v'): string {
+  return orient + FILES[c.file] + (c.rank + 1);
+}

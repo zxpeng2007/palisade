@@ -260,4 +260,47 @@
     font-size: 1.05rem;
     line-height: 1.2;
   }
+
+  /* On a phone this list is the one place in the game with a dozen targets a
+     few pixels apart, so the rows open up to a finger's width. The box keeps a
+     fixed height at every size — the moves scroll inside it, and a game that
+     gains a move must not push the page around. */
+  @media (max-width: 720px) {
+    .moves {
+      height: 340px;
+      padding: 6px 8px;
+    }
+    .moves td {
+      padding: 0 4px 0 0;
+    }
+    .moves button {
+      width: 100%;
+      min-height: 44px;
+      padding: 0 10px;
+      font-size: 1.02rem;
+    }
+    .moves button .tok {
+      min-width: 2.6em;
+    }
+    .legend {
+      min-height: 1.9em;
+      font-size: 0.9rem;
+    }
+    /* Stepping is how a phone reads a game: the list is a long way down the
+       column, and on a reviewed game the board and the move you are asking
+       about are hundreds of pixels apart. So the stepper rides the bottom of
+       the screen while there is still page below it, and settles back into
+       its own place in the column at the end. */
+    .nav {
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+      gap: 8px;
+      padding: 6px 0 8px;
+      background: var(--bg);
+    }
+    .nav button {
+      font-size: 1.3rem;
+    }
+  }
 </style>

@@ -45,6 +45,11 @@ body {
     sans-serif;
   font-size: 15px;
   line-height: 1.55;
+  /* A phone turned to landscape otherwise inflates the text of its own
+     accord, which on this site means the board and its labels disagreeing
+     about how big a square is. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 a {
@@ -148,4 +153,216 @@ code {
 
 .dim {
   color: var(--text-dim);
+}
+
+/* ---------------------------------------------------------------------------
+   Touch
+   ---------------------------------------------------------------------------
+   Anything aimed at with a finger is at least 44px in the direction it is
+   aimed at. Two triggers, because both cases are real: a narrow window, and a
+   tablet that is wide but still touched. A button that reads as a word inside
+   a sentence opts out with `link` — a 44px word would tear the paragraph it
+   sits in apart, and those buttons always have running text around them to
+   hit instead.
+   --------------------------------------------------------------------------- */
+@media (max-width: 720px), (pointer: coarse) {
+  button:not(.link),
+  input:not([type='checkbox']),
+  select {
+    min-height: 44px;
+  }
+  /* Both directions, for the buttons whose label is a single character — the
+     banner's dismiss × was 29px wide and 44 tall, which is a miss waiting to
+     happen next to a link. */
+  button:not(.link) {
+    min-width: 44px;
+  }
+
+  /* The box is a 20px mark; the label around it is what gets tapped. */
+  input[type='checkbox'] {
+    width: 20px;
+    height: 20px;
+  }
+  label:has(> input[type='checkbox']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+  }
+
+  /* `row` is this site's name for one clickable line of a panel list — a seek
+     to join, a game to watch, an engine to challenge. Whole rows are the
+     targets, so they are sized like controls rather than like text.
+     (Links that sit inside a sentence are left at text size on purpose: they
+     are read as words, and WCAG's target-size rule exempts them for that.) */
+  #app .panel .row {
+    min-height: 44px;
+  }
+
+  /* Footer links wrap onto two lines on a phone, so they need real height of
+     their own rather than the 20px a line of 0.85rem text comes to. */
+  #app footer nav {
+    gap: 0 18px;
+  }
+  #app footer nav a {
+    display: inline-block;
+    padding: 13px 0; /* 0.85rem of line plus this clears 44px */
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Phones
+   ---------------------------------------------------------------------------
+   Below 720px the screen is held in one hand and the board is the thing worth
+   spending it on: gutters shrink, and the play page is rearranged so that the
+   board and the two controls a game actually needs — your clock and resign —
+   are on screen together.
+
+   The height condition keeps this apart from the short-and-wide layout below,
+   so a phone on its side gets one arrangement rather than both. No portrait
+   phone is under 561px tall.
+   --------------------------------------------------------------------------- */
+@media (max-width: 720px) and (min-height: 561px) {
+  /* 16px of gutter is 9% of a 375px screen, and the board pays for it. */
+  #app main {
+    padding: 10px 10px 32px;
+  }
+  #app header {
+    padding: 4px 12px;
+  }
+  /* Direct children of the app root: the site's own two strips, and not the
+     result banner that a finished game puts inside the play page. */
+  #app > .modebar {
+    padding: 10px 10px 0;
+  }
+  #app > .banner {
+    padding: 0 10px;
+  }
+  #app footer {
+    padding: 10px 12px 20px;
+  }
+
+  /* Two site-wide strips that a game has no use for. Humans-or-engines is a
+     choice about where to browse, and 76px of it above a board is 9% of the
+     screen spent on a question nobody in a game is asking. The verify-your-
+     address reminder is 162px on a phone and cannot be acted on with a clock
+     running — it belongs on the lobby, which is where a rated game is started
+     and where it still appears. Between them they were pushing resign 100px
+     below the fold.
+
+     Keyed off the play page's own container, and both are direct children of
+     the app root, which is what keeps this off the result banner inside the
+     game. A browser without :has support simply keeps both strips, which is
+     what it does today. */
+  #app:has(main .game) > .modebar,
+  #app:has(main .game) > .banner {
+    display: none;
+  }
+
+  /* -- the play page -------------------------------------------------------
+     Game.svelte draws this page as a board column plus an aside holding
+     everything else. Stacked into one column that puts your own clock and the
+     resign button underneath a 260px move list and off the bottom of the
+     screen: measured at 375x812, your clock ended 233px below the fold and
+     Resign 278px below it, so both cost a scroll — with the board leaving the
+     screen as you scrolled.
+
+     So on a phone the aside stops being a box of its own and its parts are
+     placed individually around the board: opponent above it, you below it,
+     the controls under that, the move list last, where scrolling to it
+     between moves is no loss.
+
+     These rules live here rather than in Game.svelte because the board inside
+     that file is being rebuilt in parallel, and because this is the site's
+     responsive layer. They lean only on the names that file gives its own
+     parts; if one is renamed the page falls back to today's stacked order
+     rather than breaking. The `#app` prefix buys the specificity to outrank
+     Svelte's scoped selectors, which are two classes deep by construction. */
+  #app .game {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  #app .game > aside {
+    display: contents;
+  }
+  #app .game .banner {
+    order: 1; /* the result: the first thing to say about a finished game */
+  }
+  #app .game .meta {
+    order: 2;
+  }
+  /* A seat is a name and a clock: 44px whether or not the clock is in it. */
+  #app .game .seat {
+    order: 3; /* the opponent, above the board they are playing on */
+    min-height: 44px;
+  }
+  #app .game > .board-col {
+    order: 4;
+  }
+  /* The second seat is yours. Matched by what precedes it rather than by
+     position, so anything Game.svelte puts between the two seats later leaves
+     this rule alone. */
+  #app .game .seat ~ .seat {
+    order: 5;
+  }
+  #app .game .controls {
+    order: 6; /* resign and abort, under your own clock, in thumb reach */
+  }
+  #app .game .flash {
+    order: 7;
+  }
+  #app .game .nav {
+    order: 8; /* stepping through moves beats reading them on a phone */
+  }
+  #app .game .moves {
+    order: 9;
+  }
+  #app .game .legend {
+    order: 10;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   A phone on its side
+   ---------------------------------------------------------------------------
+   The board takes the width it is given and is square, so in a 375px-tall
+   window it came out 765px on a side: half a board on screen, the clock 1131px
+   below the fold, and no way to play. Height is the scarce dimension here, so
+   the board is capped by it and everything else sits alongside — which is also
+   the shape a short desktop window wants.
+   --------------------------------------------------------------------------- */
+@media (max-height: 560px) and (min-width: 560px) {
+  #app main {
+    padding: 8px 10px 16px;
+  }
+  #app:has(main .game) > .modebar,
+  #app:has(main .game) > .banner {
+    display: none;
+  }
+  #app .game {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  /* Square, so a cap on the width is a cap on the height. The subtraction is
+     the header and the page's own padding: what is left is the board. */
+  #app .game > .board-col {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: calc(100vh - 96px);
+  }
+  #app .game > aside {
+    flex: 1 1 240px;
+    min-width: 0;
+    gap: 6px;
+  }
+  /* The list has to earn its place in a 375px-tall window, and it is the one
+     thing here that can be scrolled instead of shown: two rows of it, so that
+     the clock and resign underneath stay on screen. */
+  #app .game .moves {
+    height: 84px;
+  }
 }

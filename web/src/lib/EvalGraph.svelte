@@ -162,6 +162,15 @@
     /* A drag along the graph is a scrub, not a page scroll. */
     touch-action: none;
   }
+  /* A finger needs somewhere to land that is not the line it is trying to
+     read. The padding is vertical only: the ply a pointer is over is worked
+     out from this element's width, which must keep meaning the graph's own. */
+  @media (max-width: 720px) {
+    .graph {
+      padding: 10px 0;
+      background: var(--bg); /* the strips read as part of the graph */
+    }
+  }
   .graph.live {
     cursor: pointer;
   }

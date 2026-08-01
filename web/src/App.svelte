@@ -4,6 +4,8 @@
   import { mode, modeHash, prefersEnginesHome, setMode } from './lib/mode';
   import { note } from './lib/notify';
   import { connect, subscribe } from './lib/ws';
+  import { closeIntro, introOpen, offerIntro } from './lib/intro';
+  import Intro from './lib/Intro.svelte';
   import ModeSwitch from './lib/ModeSwitch.svelte';
   import SiteFooter from './lib/SiteFooter.svelte';
   import Title from './lib/Title.svelte';
@@ -91,6 +93,10 @@
 
     boot();
     connect();
+    // Almost nobody arriving has played this game before, and the name on
+    // the door does not tell them. Explain it once, on the first visit,
+    // before asking for a move.
+    offerIntro();
     const onHash = () => {
       route = parse(location.hash);
       adoptMode(route);
@@ -170,6 +176,8 @@
     <Lobby />
   {/if}
 </main>
+
+<Intro open={$introOpen} on:close={closeIntro} />
 
 <SiteFooter />
 

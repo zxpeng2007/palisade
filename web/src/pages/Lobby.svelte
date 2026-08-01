@@ -125,4 +125,18 @@
   .signin {
     margin-bottom: 0;
   }
+
+  /* The presets are the point of this page on a phone: two to a row at a size
+     worth aiming at, rather than three narrow ones. */
+  @media (max-width: 720px) {
+    .presets {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .preset {
+      padding: 14px 0;
+      font-size: 1.15rem;
+    }
+  }
 </style>

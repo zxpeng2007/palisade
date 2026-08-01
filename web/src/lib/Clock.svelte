@@ -52,6 +52,10 @@
 </div>
 
 <style>
+  /* Tabular figures and a floor on the width together mean a tick can never
+     change the size of this box — a clock that resizes sixty times a minute
+     drags the whole column around with it. The floor is set in ch so it
+     survives the larger type below. */
   .clock {
     font-variant-numeric: tabular-nums;
     font-size: 1.5rem;
@@ -64,6 +68,15 @@
     display: inline-block;
     min-width: 5.2ch;
     text-align: center;
+  }
+  /* On a phone the clock is the one number you glance at mid-move, and it is
+     also what sets the height of the row it shares with the player's name. */
+  @media (max-width: 720px) {
+    .clock {
+      font-size: 1.7rem;
+      padding: 4px 14px;
+      min-height: 44px;
+    }
   }
   .clock.running {
     color: var(--text);

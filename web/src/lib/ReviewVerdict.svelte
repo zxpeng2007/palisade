@@ -227,4 +227,44 @@
     font-size: 0.85rem;
     text-decoration: underline;
   }
+
+  @media (max-width: 720px) {
+    /* The played move and the engine's move stack, one label per line, rather
+       than sharing a row with a sentence that would wrap to three lines of
+       its own beside them. */
+    .pair {
+      grid-template-columns: auto 1fr;
+      gap: 4px 8px;
+    }
+    .note {
+      grid-column: 1 / -1;
+      margin-bottom: 4px;
+    }
+    .tok {
+      font-size: 1.15rem;
+    }
+    /* Five band names across 309px is 60px each, which 0.62rem was chosen to
+       fit; the reading distance is shorter on a phone but the type should not
+       be this small, so the row loses the labels it cannot show and keeps the
+       pin, the lit band, and the sentence under it that names both. */
+    .names {
+      display: none;
+    }
+    .bands {
+      height: 12px;
+    }
+    .scale {
+      font-size: 0.78rem;
+      margin-top: 6px;
+    }
+    .foot {
+      gap: 4px 8px;
+    }
+    /* On its own line at the end of the panel, so it can have the height of a
+       real control without disturbing a sentence. */
+    button.link {
+      padding: 12px 0;
+      font-size: 0.9rem;
+    }
+  }
 </style>

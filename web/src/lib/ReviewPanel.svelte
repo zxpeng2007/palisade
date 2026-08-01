@@ -228,4 +228,28 @@
     color: var(--danger);
     margin-top: 8px;
   }
+
+  /* Two accuracies side by side come to 154px each on a 375px screen, which is
+     not enough for a name and a percentage: the name would be ellipsised to
+     make room for a number that is only meaningful with the name attached.
+     One above the other, both fit whole. */
+  @media (max-width: 720px) {
+    .review {
+      padding: 12px;
+    }
+    .acc {
+      grid-template-columns: 1fr;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .side {
+      gap: 0 8px;
+    }
+    .sub {
+      font-size: 0.76rem;
+    }
+    .start .line {
+      min-width: 0; /* the sentence wraps rather than forcing the panel wide */
+    }
+  }
 </style>
