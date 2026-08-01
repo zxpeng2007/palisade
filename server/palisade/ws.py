@@ -190,8 +190,14 @@ async def handle(ws: WebSocket):
                     await manager_action(data, "abort", user["id"])
                 elif t == "seek":
                     initial, increment = check_clock(data.get("clock", {}))
-                    lobby.add_seek(player(), bool(data.get("rated", False)),
-                                   initial, increment)
+                    rated = bool(data.get("rated", False))
+                    # The same gate the REST routes apply. It has to be here
+                    # too: the web client posts seeks and challenges over the
+                    # socket exclusively, so gating only the HTTP path leaves
+                    # the rule unenforced everywhere it is actually used.
+                    if rated:
+                        auth.require_verified(user, "playing rated games")
+                    lobby.add_seek(player(), rated, initial, increment)
                 elif t == "seekCancel":
                     lobby.cancel_seek(user["id"])
                 elif t == "challenge":
@@ -200,12 +206,21 @@ async def handle(ws: WebSocket):
                     if dest is None:
                         raise GameError("no such user")
                     initial, increment = check_clock(data.get("clock", {}))
+                    rated = bool(data.get("rated", False))
+                    if rated:
+                        auth.require_verified(user, "sending rated challenges")
                     lobby.challenge(player(), Player.from_row(dict(dest)),
-                                    bool(data.get("rated", False)),
-                                    initial, increment,
+                                    rated, initial, increment,
                                     str(data.get("color", "random")))
                 elif t == "accept":
-                    lobby.accept(str(data.get("id", "")), user["id"])
+                    cid = str(data.get("id", ""))
+                    # Accepting a rated challenge enters a rated game just as
+                    # surely as offering one, so it is gated too. Peek before
+                    # accepting, since accepting consumes the challenge.
+                    pending = lobby.challenges.get(cid)
+                    if pending is not None and pending.rated:
+                        auth.require_verified(user, "playing rated games")
+                    lobby.accept(cid, user["id"])
                 elif t == "decline":
                     lobby.decline(str(data.get("id", "")), user["id"])
             except GameError as e:

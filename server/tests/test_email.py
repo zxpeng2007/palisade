@@ -7,9 +7,11 @@ one TestClient can hold several identities without a shared jar.
 """
 
 import hashlib
+import io
 import re
 import secrets
 import sqlite3
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,8 +20,8 @@ import palisade.db as db
 from palisade import auth, mail
 
 PASSWORD = "hunter22valid"
-# One rated game, played out: seek matching pairs on the clock, so a test that
-# parks a seek cannot be matched by an unrelated one.
+# Seeks pair up on the time control, so the one test that parks a seek uses a
+# clock of its own rather than this shared one.
 BLITZ = {"initial": 300, "increment": 3}
 
 # The 15-ply scripted win for Player 1, as in test_api.
@@ -267,6 +269,79 @@ def test_a_failed_send_is_reported_not_hidden(client, monkeypatch):
     assert db.one("SELECT email_verified FROM users WHERE username = 'unreachable'"
                   )["email_verified"] == 0
     client.cookies.clear()
+
+
+def test_resend_api_call_and_its_failures(monkeypatch):
+    """The provider path, stubbed at httpx: what goes out, and what a refusal
+    does. Console mode covers every other test in this file, so this is the
+    only place the production transport is exercised."""
+    import asyncio
+
+    import httpx
+
+    seen: dict = {}
+    reply: tuple = (200, "{}")
+
+    class StubResponse:
+        def __init__(self, status_code, text):
+            self.status_code, self.text = status_code, text
+
+    class StubClient:
+        def __init__(self, timeout=None):
+            seen["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            seen.update(url=url, json=json, headers=headers)
+            if isinstance(reply, Exception):
+                raise reply
+            return StubResponse(*reply)
+
+    monkeypatch.setattr(httpx, "AsyncClient", StubClient)
+    monkeypatch.setenv("PALISADE_RESEND_KEY", "re_pretend_secret")
+    monkeypatch.setenv("PALISADE_MAIL_FROM", "Palisade <hello@murus.net>")
+    mail.outbox.clear()
+
+    asyncio.run(mail.send_verification("her@example.test", "her", "tok"))
+    assert seen["url"] == mail.RESEND_ENDPOINT
+    assert seen["timeout"] == mail.TIMEOUT
+    assert seen["headers"]["Authorization"] == "Bearer re_pretend_secret"
+    assert seen["json"]["from"] == "Palisade <hello@murus.net>"
+    assert seen["json"]["to"] == ["her@example.test"]
+    assert "/#/verify/tok" in seen["json"]["text"]
+    assert "/#/verify/tok" in seen["json"]["html"]
+    assert mail.outbox[-1]["console"] is False
+
+    for reply in [(422, '{"message":"the domain is not verified"}'),
+                  httpx.ConnectError("no route to host")]:
+        mail.outbox.clear()
+        with pytest.raises(mail.MailError) as refused:
+            asyncio.run(mail.send_verification("her@example.test", "her", "tok"))
+        assert "re_pretend_secret" not in str(refused.value)
+        assert not mail.outbox, "a message that did not go must not look sent"
+
+    # A key with no sender address is a misconfiguration, and saying so beats
+    # letting the provider reject every message for a reason nobody reads.
+    reply = (200, "{}")
+    monkeypatch.delenv("PALISADE_MAIL_FROM")
+    with pytest.raises(mail.MailError):
+        asyncio.run(mail.send_verification("her@example.test", "her", "tok"))
+
+
+def test_console_copy_survives_a_narrow_stdout(monkeypatch):
+    # A terminal opened in a legacy encoding must not turn the dash in the
+    # message into a UnicodeEncodeError, and a failed signup.
+    narrow = io.TextIOWrapper(io.BytesIO(), encoding="ascii")
+    monkeypatch.setattr(sys, "stdout", narrow)
+    safe = mail._console_safe(mail._bodies("dash", "tok", changed=False)[0])
+    monkeypatch.undo()
+    safe.encode("ascii")  # raises if anything unprintable survived
+    assert "/#/verify/tok" in safe
 
 
 def test_base_url_drives_the_link(monkeypatch):

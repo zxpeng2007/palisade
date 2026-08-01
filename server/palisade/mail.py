@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import html
 import os
+import sys
 
 DEFAULT_BASE_URL = "https://murus.net"
 RESEND_ENDPOINT = "https://api.resend.com/emails"
@@ -34,9 +35,24 @@ class MailError(RuntimeError):
     """A message that did not go out. Callers turn this into a 502."""
 
 
-#: Every message this process has sent or printed, newest last. Console mode
-#: has no other record, and tests read the link out of here.
+#: Every message this process has actually delivered, newest last — nothing
+#: that raised is in here. Console mode has no other record, and tests read
+#: the link out of it.
 outbox: list[dict] = []
+
+
+def _record(to: str, subject: str, text: str, body: str, console: bool) -> None:
+    outbox.append({"to": to, "subject": subject, "text": text, "html": body,
+                   "console": console})
+    del outbox[:-OUTBOX_LIMIT]
+
+
+def _console_safe(text: str) -> str:
+    """The message keeps its typography; the copy echoed to the terminal has
+    to survive whatever encoding stdout was opened with. Losing a signup to a
+    UnicodeEncodeError over a dash would be a ridiculous way to fail."""
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    return text.encode(encoding, "replace").decode(encoding, "replace")
 
 
 def base_url() -> str:
@@ -106,14 +122,12 @@ async def send_verification(to: str, username: str, token: str,
 
 async def _send(to: str, subject: str, text: str, body: str) -> None:
     key = os.environ.get("PALISADE_RESEND_KEY", "").strip()
-    outbox.append({"to": to, "subject": subject, "text": text, "html": body,
-                   "console": not key})
-    del outbox[:-OUTBOX_LIMIT]
-
     if not key:
-        print(f"[palisade mail] console mode: no PALISADE_RESEND_KEY, so this "
-              f"message was not sent. To: {to}\nSubject: {subject}\n{text}",
-              flush=True)
+        print(_console_safe(
+            f"[palisade mail] console mode: no PALISADE_RESEND_KEY, so this "
+            f"message was not sent. To: {to}\nSubject: {subject}\n{text}"),
+            flush=True)
+        _record(to, subject, text, body, console=True)
         return
 
     sender = os.environ.get("PALISADE_MAIL_FROM", "").strip()
@@ -122,8 +136,12 @@ async def _send(to: str, subject: str, text: str, body: str) -> None:
         raise MailError("PALISADE_RESEND_KEY is set but PALISADE_MAIL_FROM is not")
 
     # Imported here so a deployment that never leaves console mode does not
-    # need an HTTP client installed at all.
-    import httpx
+    # need an HTTP client installed at all, and so a missing one is a 502 on
+    # the signup rather than a server that will not start.
+    try:
+        import httpx
+    except ModuleNotFoundError:
+        raise MailError("sending mail needs httpx installed") from None
 
     payload = {"from": sender, "to": [to], "subject": subject,
                "text": text, "html": body}
@@ -143,3 +161,4 @@ async def _send(to: str, subject: str, text: str, body: str) -> None:
         # recipient) and never quote the key back. Trim: they can be long.
         raise MailError(f"mail provider refused the message "
                         f"(HTTP {response.status_code}): {response.text[:200]}")
+    _record(to, subject, text, body, console=False)

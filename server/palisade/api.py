@@ -123,8 +123,8 @@ async def email_resend(request: Request):
     user = auth.require_session(request, "request a verification email")
     fresh = db.one("SELECT * FROM users WHERE id = ?", (user["id"],))
     if fresh["email_verified"]:
-        # Nothing to do, and saying so would tell a borrowed session which
-        # accounts are still open to a resend. 200 and silence.
+        # Nothing to do. 200 rather than an error so a client need not special
+        # case the stale button on a page opened before the link was used.
         return {"ok": True, "sent": False}
     if not fresh["email"]:
         raise HTTPException(400, "this account has no email address")

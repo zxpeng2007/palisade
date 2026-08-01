@@ -255,3 +255,46 @@ def test_rest_move_appears_on_ws(client):
         assert st["game"] == gid
         assert st["view"]["p1"] == "e2"
         assert st["legal"]  # paula to move, on her own authenticated socket
+
+
+def test_unverified_cannot_open_a_rated_seek_over_the_socket(client):
+    """The gate has to live on the socket too.
+
+    The web client posts seeks and challenges over the websocket exclusively,
+    so gating only the REST routes left the rule unenforced on the path
+    everyone actually uses: an unverified account could sit in the lobby with
+    a rated seek.
+    """
+    r = client.post("/api/register", json={
+        "username": "ws_unverified", "password": "hunter22valid",
+        "email": "ws_unverified@example.test"})
+    assert r.status_code == 200, r.text
+    sid = client.cookies.get(auth.SESSION_COOKIE)
+    client.cookies.clear()
+    headers = {"cookie": f"{auth.SESSION_COOKIE}={sid}"}
+
+    with contextlib.ExitStack() as stack:
+        sock = connect_ws(stack, client, headers)
+        sock.send_json({"t": "sub", "ch": "lobby"})
+        sock.send_json({"t": "seek", "rated": True,
+                        "clock": {"initial": 300, "increment": 3}})
+        msg = recv_until(sock, lambda m: m.get("t") == "err")
+        assert "confirm your email" in msg["msg"].lower()
+
+        # Casual play is deliberately still open, so the site stays usable
+        # while the mail is in flight.
+        sock.send_json({"t": "seek", "rated": False,
+                        "clock": {"initial": 300, "increment": 3}})
+        assert recv_until(sock, lambda m: m.get("t") == "lobby" and any(
+            s["username"] == "ws_unverified" and not s["rated"]
+            for s in m.get("seeks", [])))
+
+        # And it opens the moment the address is confirmed — the gate reads
+        # the flag fresh, so no reconnect is needed.
+        db.execute("UPDATE users SET email_verified = 1 WHERE username = ?",
+                   ("ws_unverified",))
+        sock.send_json({"t": "seek", "rated": True,
+                        "clock": {"initial": 600, "increment": 0}})
+        assert recv_until(sock, lambda m: m.get("t") == "lobby" and any(
+            s["username"] == "ws_unverified" and s["rated"]
+            for s in m.get("seeks", [])))

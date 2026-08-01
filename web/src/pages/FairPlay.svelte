@@ -18,12 +18,24 @@
       precisely.
     </p>
     <p class="rule">
-      The rule is not “no engines”. It is “be what your account says you are”.
+      The rule is “be what your account says you are”. Engines play as engines.
+      People play as people. A rating is a claim about a player, and everything
+      below exists to keep that claim true.
     </p>
+    <p>Which means the oldest rule still applies, without exception:</p>
+    <blockquote class="hard-rule">
+      If you are playing on a human account, you may not use an engine, a
+      solver, an analysis board, or another player’s advice to choose your
+      moves. Not in rated games, not in casual games, not once, not “just to
+      check”.
+    </blockquote>
     <p>
-      A rating is a claim about a player. When a person plays, the rating
-      measures that person. When an engine plays, it measures that engine.
-      Everything below follows from keeping those two claims true.
+      That we welcome engines elsewhere on the site changes nothing about this.
+      It makes it worse: an engine has
+      <a href="#/engines">its own account</a> waiting for it, so running one
+      behind a human name is a deliberate choice to misrepresent who is
+      playing. This is the one thing here we will remove an account for
+      without discussion.
     </p>
   </header>
 
@@ -32,17 +44,19 @@
 
     <h3>Play your own moves</h3>
     <p>
-      During a game on a human account, do not consult an engine, a solver,
-      another site’s analysis board, or a stronger player. This applies to
-      rated and casual games alike; casual games are still someone else’s time.
+      Every move in every game must be yours — your reading of the position, in
+      the time on your clock. No engine, no solver, no analysis board open in
+      another tab, no stronger player over your shoulder, no “I only used it in
+      the endgame”. Casual games included; they are still someone else’s
+      evening.
     </p>
 
-    <h3>Between games, use anything you like</h3>
+    <h3>Study freely when you are not playing</h3>
     <p>
-      Analyse finished games with any engine, including ours. Read openings.
-      Study your losses with a bot at 200,000 simulations. None of that touches
-      the claim your rating makes, because nothing is helping you
-      <em>while the clock runs</em>.
+      Analyse your finished games with any engine, including ours at full
+      strength. Read openings, drill endgames, have a bot show you what you
+      missed. Learning between games is the point of the site. It is only ever
+      a violation <em>while a clock is running</em>.
     </p>
 
     <h3>One account</h3>
@@ -122,51 +136,55 @@
   </section>
 
   <section>
-    <h2>What we can and cannot detect</h2>
-    <p class="dim">Honesty about enforcement, since the alternative is theatre:</p>
-    <p>
-      We can see move times, rating trajectories, and how a player’s choices
-      compare to a strong engine’s. Those signals catch careless cheating — a
-      1200 playing top engine moves at a constant three seconds is not subtle.
-      They do not catch careful cheating, and no site’s do. We are a small site
-      and we are not going to pretend to a detection apparatus we have not
-      built.
-    </p>
-    <p>
-      So this policy leans on something else:
-      <strong>there is very little to gain here.</strong> If you want to know how
-      a strong engine plays, the engine is right there and will play you for
-      free, at any time control, as many games as you like. Rating theft from a
-      ladder this size buys nothing. The interesting question on this site was
-      never “can I beat this person” — it is “how good can I make my engine”,
-      and that question is only worth asking honestly.
-    </p>
-  </section>
-
-  <section>
     <h2>Enforcement</h2>
     <p>
-      Accounts that break these rules may have games voided, ratings reset, or be
-      removed. There is no appeals bureaucracy; there is a person reading
-      reports. Report a concern by opening an issue on
-      <a href={REPO + '/issues'} target="_blank" rel="noopener">the repository</a>,
-      or contact the operator directly.
+      Every game is recorded in full — moves, the time spent on each one, and
+      the rating history around it. We compare human games against engine
+      analysis, and a person playing an engine’s moves at an engine’s tempo
+      does not look like a person playing. Accounts we are satisfied are using
+      assistance have their games voided, their rating removed, and the account
+      closed.
     </p>
     <p>
-      We would rather correct a misunderstanding than ban someone. If you are not
-      sure whether something is allowed — a training harness, a shared account
-      for a team engine, an unusual setup — ask first. Answers are cheap.
+      We will also say what we cannot do, because a policy that overstates its
+      detection is a policy nobody believes. We are a small site. Careful,
+      occasional cheating is hard for anyone to catch and we will not pretend
+      otherwise. So the rule above is not primarily a dare to our detection —
+      it is the condition for this site being worth using at all.
+    </p>
+    <p>
+      And it costs you nothing to keep. If you want to know how a strong engine
+      plays, the engine is right there, declared, and will play you for free at
+      any time control for as long as you like. Nothing is gained by smuggling
+      one onto a human account that you cannot have openly, immediately, and
+      with a better opponent.
+    </p>
+    <p>
+      Reports go to an issue on
+      <a href={REPO + '/issues'} target="_blank" rel="noopener">the repository</a>
+      or straight to the operator. There is no appeals bureaucracy; there is a
+      person reading them. And we would far rather answer a question than close
+      an account — if you are unsure whether something is allowed (a training
+      harness, a shared account for a team engine, an unusual setup), ask
+      first. Answers are cheap.
     </p>
   </section>
 
   <section class="short">
     <h2>In short</h2>
     <ul>
-      <li>Human account: your moves, during the game. Anything you like between games.</li>
+      <li>
+        <strong>Human account: your own moves, always. No engine help during a
+        game, ever.</strong>
+      </li>
+      <li>Study with any engine you like between games.</li>
       <li>Engine account: declare it, then let it play. Any engine, any hardware.</li>
       <li>One account per player; one account per engine.</li>
       <li>Do not throw games or arrange results.</li>
-      <li>Undeclared engines on human accounts are the line.</li>
+      <li>
+        An undeclared engine on a human account is the line, and it is not a
+        fine one.
+      </li>
     </ul>
   </section>
 
@@ -213,6 +231,20 @@
     border-radius: 0 6px 6px 0;
     font-size: 1.08rem;
     font-weight: 600;
+  }
+  /* The one prohibition everything else hangs off. It is set apart because a
+     reader who takes nothing else from this page must take this. */
+  .hard-rule {
+    margin: 18px 0;
+    padding: 16px 20px;
+    background: var(--surface-2, var(--surface));
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    font-size: 1.12rem;
+    line-height: 1.6;
+    font-weight: 600;
+    color: var(--text);
   }
   section {
     margin-top: 38px;
