@@ -106,6 +106,34 @@ So 1+0 is bullet, 3+0 and 5+3 are blitz, 15+10 is rapid, 30+0 is classical.
 Speed appears on every game and seek object as `"speed"`, and is a filter on
 the endpoints below.
 
+### Titles
+
+Titles follow FIDE's, at FIDE's thresholds and on FIDE's terms:
+
+| title | | rating |
+|---|---|---|
+| `GM` | Grandmaster | 2500 |
+| `IM` | International Master | 2400 |
+| `FM` | FIDE Master | 2300 |
+| `CM` | Candidate Master | 2200 |
+
+A title is awarded the first time an **established** rating reaches the
+threshold, and is then held **permanently** — FIDE does not revoke a
+grandmaster's title when their rating falls, and neither do we. Established
+means a rating deviation at or below 110, our equivalent of FIDE's minimum
+number of rated games: a rating that has not settled is not yet a claim about
+anybody.
+
+Consequently, a player's rating and their title can disagree, and that is the
+system working. `title` is null for the untitled, and appears wherever a
+player does — profiles, leaderboards, games, seeks. `peak` accompanies it on
+profiles, being the highest **established** rating the account has held.
+A rating only counts towards the peak once it has settled, so a spike while
+provisional is not banked and cannot be cashed in later.
+
+These are real thresholds, not scaled to this site's population. Nobody holds
+a title yet.
+
 ### Leaderboards and top games
 
 Both are public and need no authentication.

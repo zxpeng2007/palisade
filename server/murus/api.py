@@ -55,7 +55,8 @@ def _account_json(user: dict) -> dict:
     u = dict(fresh)
     return {"id": u["id"], "username": u["username"], "bot": bool(u["is_bot"]),
             "rating": round(u["rating"]), "rd": round(u["rd"]),
-            "games": u["rated_games"], "email": u["email"],
+            "games": u["rated_games"], "title": u["title"],
+            "peak": round(u["peak_rating"]), "email": u["email"],
             "emailVerified": bool(u["email_verified"])}
 
 
@@ -261,6 +262,7 @@ async def leaderboard(kind: str = "all", speed_filter: str | None = None,
             "rating": round(u["rating"]),
             "provisional": u["rd"] > 110,
             "bot": bool(u["is_bot"]),
+            "title": u["title"],
             "games": u["rated_games"],
         })
         if len(players) >= limit:
@@ -299,9 +301,14 @@ async def games_top(kind: str = "all", limit: int = 8):
         })
 
     recent: dict[str, list] = {}
+    # Titles come from the accounts as they stand, not as they stood when the
+    # game was played. They are permanent, so the two only differ while a title
+    # is still being earned, and a player who is a grandmaster today should be
+    # labelled one on every game of theirs a visitor can find.
     for row in db.query(
         """SELECT g.*, u1.username AS p1name, u1.is_bot AS p1bot,
-                  u2.username AS p2name, u2.is_bot AS p2bot
+                  u1.title AS p1title, u2.username AS p2name,
+                  u2.is_bot AS p2bot, u2.title AS p2title
            FROM games g JOIN users u1 ON u1.id = g.p1 JOIN users u2 ON u2.id = g.p2
            WHERE g.status = 'finished'
            ORDER BY g.finished DESC LIMIT 300"""
@@ -318,9 +325,9 @@ async def games_top(kind: str = "all", limit: int = 8):
         bucket.append({
             "id": g["id"],
             "first": {"username": g["p1name"], "rating": round(r1),
-                      "bot": bool(g["p1bot"])},
+                      "bot": bool(g["p1bot"]), "title": g["p1title"]},
             "second": {"username": g["p2name"], "rating": round(r2),
-                       "bot": bool(g["p2bot"])},
+                       "bot": bool(g["p2bot"]), "title": g["p2title"]},
             "rated": bool(g["rated"]), "speed": cat,
             "winner": SEAT_NAMES[g["winner"]] if g["winner"] is not None else None,
             "reason": g["reason"],
@@ -358,6 +365,7 @@ async def user_profile(username: str):
         })
     return {"username": u["username"], "bot": bool(u["is_bot"]),
             "rating": round(u["rating"]), "provisional": u["rd"] > 110,
+            "title": u["title"], "peak": round(u["peak_rating"]),
             "games": u["rated_games"], "recent": recent}
 
 
@@ -430,7 +438,8 @@ async def seek_cancel(request: Request):
 def _db_game_full(game_id: str) -> dict | None:
     g = db.one(
         """SELECT g.*, u1.username AS p1name, u1.is_bot AS p1bot,
-                  u2.username AS p2name, u2.is_bot AS p2bot
+                  u1.title AS p1title, u2.username AS p2name,
+                  u2.is_bot AS p2bot, u2.title AS p2title
            FROM games g JOIN users u1 ON u1.id = g.p1 JOIN users u2 ON u2.id = g.p2
            WHERE g.id = ?""", (game_id,))
     if g is None:
@@ -450,9 +459,11 @@ def _db_game_full(game_id: str) -> dict | None:
         "type": "gameFull", "id": g["id"], "rated": bool(g["rated"]),
         "clock": {"initial": g["initial"], "increment": g["increment"]},
         "first": {"username": g["p1name"], "rating": _r(g["p1_rating"]),
-                  "bot": bool(g["p1bot"]), "delta": g["p1_delta"]},
+                  "bot": bool(g["p1bot"]), "title": g["p1title"],
+                  "delta": g["p1_delta"]},
         "second": {"username": g["p2name"], "rating": _r(g["p2_rating"]),
-                   "bot": bool(g["p2bot"]), "delta": g["p2_delta"]},
+                   "bot": bool(g["p2bot"]), "title": g["p2title"],
+                   "delta": g["p2_delta"]},
         "state": state,
     }
 

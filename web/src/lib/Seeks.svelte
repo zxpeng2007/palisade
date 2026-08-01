@@ -2,6 +2,7 @@
   import { send } from './ws';
   import { needSignIn } from './session';
   import { clockLabel } from './format';
+  import Title from './Title.svelte';
 
   export let seeks: any[] = [];
   export let me: string | null = null;
@@ -32,6 +33,7 @@
       {#if s.username === me}
         <div class="row">
           <span class="who">
+            <Title title={s.title} />
             <strong>{s.username}</strong>
             <span class="dim">({s.rating})</span>
             · {clockLabel(s.clock)} · {s.rated ? 'rated' : 'casual'}
@@ -42,6 +44,7 @@
       {:else}
         <button class="row join" on:click={() => join(s)}>
           <span class="who">
+            <Title title={s.title} />
             <strong>{s.username}</strong>
             <span class="dim">({s.rating})</span>
             {#if s.bot && kind !== 'bot'}<span class="bot-tag">BOT</span>{/if}

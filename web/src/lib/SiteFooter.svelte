@@ -6,6 +6,7 @@
   <span class="dim">murus — the wall game, for people and engines</span>
   <nav>
     <a href="#/fairplay">Fair play</a>
+    <a href="#/titles">Titles</a>
     <a href="#/engines">Engine API</a>
     <a href={REPO + '/blob/main/API.md'} target="_blank" rel="noopener">API.md</a>
     <a href={REPO} target="_blank" rel="noopener">Source</a>

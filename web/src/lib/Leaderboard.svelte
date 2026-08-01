@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from './api';
   import { poll } from './poll';
+  import Title from './Title.svelte';
 
   export let kind: 'human' | 'bot';
   export let empty: string;
@@ -50,6 +51,7 @@
             <tr>
               <td class="rank dim">{p.rank}</td>
               <td class="who">
+                <Title title={p.title} />
                 <a href={'#/@/' + encodeURIComponent(p.username)}>{p.username}</a>
                 <!-- In engine mode every row is a bot; the tag would be noise. -->
                 {#if p.bot && kind !== 'bot'}<span class="bot-tag">BOT</span>{/if}

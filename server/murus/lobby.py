@@ -48,7 +48,7 @@ class Seek:
     def public(self) -> dict:
         return {"username": self.player.username,
                 "rating": round(self.player.rating), "rated": self.rated,
-                "bot": self.player.bot,
+                "bot": self.player.bot, "title": self.player.title,
                 "speed": speed.category(self.initial, self.increment),
                 "clock": {"initial": self.initial, "increment": self.increment}}
 

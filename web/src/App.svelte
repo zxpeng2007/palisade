@@ -6,6 +6,7 @@
   import { connect, subscribe } from './lib/ws';
   import ModeSwitch from './lib/ModeSwitch.svelte';
   import SiteFooter from './lib/SiteFooter.svelte';
+  import Title from './lib/Title.svelte';
   import VerifyBanner from './lib/VerifyBanner.svelte';
   import Lobby from './pages/Lobby.svelte';
   import Engines from './pages/Engines.svelte';
@@ -13,10 +14,19 @@
   import Auth from './pages/Auth.svelte';
   import Profile from './pages/Profile.svelte';
   import FairPlay from './pages/FairPlay.svelte';
+  import Titles from './pages/Titles.svelte';
   import Verify from './pages/Verify.svelte';
 
   interface Route {
-    page: 'lobby' | 'engines' | 'login' | 'game' | 'profile' | 'fairplay' | 'verify';
+    page:
+      | 'lobby'
+      | 'engines'
+      | 'login'
+      | 'game'
+      | 'profile'
+      | 'fairplay'
+      | 'titles'
+      | 'verify';
     id?: string;
     name?: string;
     token?: string;
@@ -56,6 +66,7 @@
     if (h === '/engines') return { page: 'engines' };
     if (h === '/login') return { page: 'login' };
     if (h === '/fairplay') return { page: 'fairplay' };
+    if (h === '/titles') return { page: 'titles' };
     return { page: 'lobby' };
   }
 
@@ -108,7 +119,12 @@
   <a class="brand" href={modeHash($mode)}>murus<span class="brand-dot">.</span></a>
   <nav>
     {#if $account}
-      <a href={'#/@/' + $account.username}>{$account.username}</a>
+      <!-- Wrapped so the title stays against the name rather than becoming a
+           nav item of its own, twelve pixels away from what it qualifies. -->
+      <span class="me">
+        <Title title={$account.title} />
+        <a href={'#/@/' + $account.username}>{$account.username}</a>
+      </span>
       <span class="rating dim">{$account.rating}</span>
       <button on:click={signOut}>Sign out</button>
     {:else if $account === null}
@@ -144,6 +160,8 @@
     <Engines />
   {:else if route.page === 'fairplay'}
     <FairPlay />
+  {:else if route.page === 'titles'}
+    <Titles />
   {:else if route.page === 'verify'}
     {#key route.token}
       <Verify token={route.token} />
@@ -185,6 +203,14 @@
     display: flex;
     align-items: center;
     gap: 12px;
+  }
+  /* A flex box of its own, so the untitled case leaves the name exactly the
+     flex item it was before this wrapper existed — same box, same pixel. */
+  .me {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    white-space: nowrap;
   }
   .modebar {
     padding: 16px 16px 0;

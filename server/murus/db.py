@@ -28,7 +28,13 @@ CREATE TABLE IF NOT EXISTS users (
     -- ALTER TABLE cannot add these to an existing table any other way. Kept
     -- last so a migrated database and a fresh one have identical layouts.
     email TEXT,
-    email_verified INTEGER NOT NULL DEFAULT 0
+    email_verified INTEGER NOT NULL DEFAULT 0,
+    -- Titles (murus/titles.py). peak_rating is the highest rating the account
+    -- has ever held; title is the highest it has earned, and is never cleared
+    -- or lowered once set. Both are appended here for the same reason as the
+    -- email columns above: this is the order ALTER TABLE produces.
+    peak_rating REAL NOT NULL DEFAULT 1500,
+    title TEXT
 );
 CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
@@ -128,6 +134,19 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # grandfathered accounts need.
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email "
                  "ON users(email COLLATE NOCASE)")
+
+    if "peak_rating" not in columns:
+        conn.execute(
+            "ALTER TABLE users ADD COLUMN peak_rating REAL NOT NULL DEFAULT 1500")
+        # Seed from today's rating. No rating history is kept, so an account
+        # that peaked at 1900 and slid back to 1600 is indistinguishable from
+        # one that has sat at 1600 all along; claiming the higher figure would
+        # be inventing it. Every peak from here on is observed.
+        conn.execute("UPDATE users SET peak_rating = rating")
+    if "title" not in columns:
+        # Left null for everyone: titles are earned by playing, and the first
+        # rated game after this migration awards any that is already due.
+        conn.execute("ALTER TABLE users ADD COLUMN title TEXT")
 
     # Reviews arrived long after the first deployment. The table itself comes
     # from _SCHEMA, but CREATE TABLE IF NOT EXISTS does nothing to a database

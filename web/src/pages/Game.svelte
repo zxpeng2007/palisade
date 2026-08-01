@@ -7,6 +7,7 @@
   import Clock from '../lib/Clock.svelte';
   import MoveList from '../lib/MoveList.svelte';
   import ReviewPanel from '../lib/ReviewPanel.svelte';
+  import Title from '../lib/Title.svelte';
   import {
     fetchReview,
     isRunning,
@@ -335,6 +336,7 @@
 
       <div class="seat">
         <div class="who">
+          <Title title={topP.title} />
           <a href={'#/@/' + topP.username}>{topP.username}</a>
           {#if topP.bot}<span class="bot-tag">BOT</span>{/if}
           <span class="dim">
@@ -363,6 +365,7 @@
 
       <div class="seat">
         <div class="who">
+          <Title title={bottomP.title} />
           <a href={'#/@/' + bottomP.username}>{bottomP.username}</a>
           {#if bottomP.bot}<span class="bot-tag">BOT</span>{/if}
           <span class="dim">
@@ -388,6 +391,7 @@
           {#if state.status === 'aborted'}
             Game aborted
           {:else if state.winner}
+            <Title title={full[state.winner].title} />
             <strong>{full[state.winner].username}</strong>
             wins {reasonText(state.reason)}
           {/if}

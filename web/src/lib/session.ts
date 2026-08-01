@@ -9,6 +9,8 @@ export interface Account {
   rating: number;
   rd: number;
   games: number;
+  /** GM, IM, FM or CM; null for the untitled, which is everybody so far. */
+  title?: string | null;
   /** Null on accounts that predate verification; those are verified anyway. */
   email: string | null;
   emailVerified: boolean;

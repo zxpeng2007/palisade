@@ -4,6 +4,7 @@
   import { flash } from './notify';
   import { PRESETS } from './format';
   import RatedNote from './RatedNote.svelte';
+  import Title from './Title.svelte';
 
   /** Engines currently connected, from the lobby snapshot. */
   export let bots: any[] = [];
@@ -45,6 +46,7 @@
     {#each bots as b (b.username)}
       <div class="row">
         <span class="who">
+          <Title title={b.title} />
           <a href={'#/@/' + encodeURIComponent(b.username)}>{b.username}</a>
           <span class="bot-tag">BOT</span>
           <span class="dim">{b.rating}{b.provisional ? '?' : ''}</span>

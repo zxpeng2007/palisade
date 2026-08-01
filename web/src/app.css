@@ -1,4 +1,4 @@
-/* Palisade — dark, one accent, information first. */
+/* Murus — dark, one accent, information first. */
 
 :root {
   --bg: #161512;
@@ -12,6 +12,9 @@
   --danger: #cc5040;
   --p1: #e0a458; /* Player 1: warm */
   --p2: #6aa1d8; /* Player 2: cool */
+  /* Player titles, and nothing else: the accent already means live/yours/won,
+     and a title must not read as any of those. */
+  --title: #d5a13c;
   --wall: #b98a52;
   --cell: #34322d;
 

@@ -1,11 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import Title from '../lib/Title.svelte';
+  import { titleName, titleRating } from '../lib/titles';
 
   export let name: string;
 
   let profile: any = null;
   let error = '';
+
+  // A title is permanent and a rating is not, so a titled player can sit below
+  // their own threshold. That is the system working, and the page has to say
+  // so — otherwise a GM rated 2380 reads as a bug in the ladder.
+  $: threshold = profile ? titleRating(profile.title) : null;
+  $: fallen = threshold !== null && profile.rating < threshold;
 
   onMount(async () => {
     try {
@@ -58,6 +66,7 @@
   <div class="profile">
     <div class="panel head">
       <h1>
+        <Title title={profile.title} />
         {profile.username}
         {#if profile.bot}<span class="bot-tag">BOT</span>{/if}
       </h1>
@@ -77,6 +86,25 @@
           <span class="dim">recent W–L</span>
         </div>
       </div>
+
+      {#if profile.title}
+        <p class="titled">
+          {#if profile.peak}
+            <strong>{titleName(profile.title) || profile.title}</strong>, earned
+            at a peak rating of <span class="peak">{profile.peak}</span> and held
+            for life.
+          {:else}
+            <strong>{titleName(profile.title) || profile.title}</strong>, held
+            for life.
+          {/if}
+          {#if fallen}
+            The rating above is below the {threshold} that earned it: a title is
+            awarded once and never revoked, so the two disagree and both are
+            right.
+          {/if}
+          <a href="#/titles">How titles work →</a>
+        </p>
+      {/if}
     </div>
 
     <div class="panel">
@@ -127,6 +155,23 @@
   }
   .value {
     font-size: 1.3rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Below the stats, because it explains one of them. */
+  .titled {
+    margin: 14px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 0.9rem;
+    color: var(--text-dim);
+    max-width: 66ch;
+  }
+  .titled strong {
+    color: var(--text);
+  }
+  .peak {
+    color: var(--text);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }

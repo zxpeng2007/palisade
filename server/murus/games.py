@@ -18,7 +18,7 @@ import secrets
 import time
 from dataclasses import dataclass
 
-from murus import db, glicko2, rules
+from murus import db, glicko2, rules, titles
 from murus.events import hub
 from murus.notation import legal_token_map
 
@@ -37,15 +37,17 @@ class Player:
     rd: float
     vol: float
     bot: bool
+    title: str | None = None
 
     @classmethod
     def from_row(cls, row: dict) -> "Player":
         return cls(row["id"], row["username"], row["rating"], row["rd"],
-                   row["vol"], bool(row["is_bot"]))
+                   row["vol"], bool(row["is_bot"]), row["title"])
 
     def public(self) -> dict:
         return {"username": self.username, "rating": round(self.rating),
-                "provisional": self.rd > 110, "bot": self.bot}
+                "provisional": self.rd > 110, "bot": self.bot,
+                "title": self.title}
 
 
 class LiveGame:
@@ -214,15 +216,37 @@ class LiveGame:
             ra["rating"], ra["rd"], ra["vol"],
             rb["rating"], rb["rd"], rb["vol"], score1)
         d1, d2 = r1 - ra["rating"], r2 - rb["rating"]
-        db.execute(
-            "UPDATE users SET rating=?, rd=?, vol=?, rated_games=rated_games+1 WHERE id=?",
-            (r1, rd1, v1, a.id))
-        db.execute(
-            "UPDATE users SET rating=?, rd=?, vol=?, rated_games=rated_games+1 WHERE id=?",
-            (r2, rd2, v2, b.id))
-        a.rating, a.rd, a.vol = r1, rd1, v1
-        b.rating, b.rd, b.vol = r2, rd2, v2
+        self._store_rating(a, r1, rd1, v1)
+        self._store_rating(b, r2, rd2, v2)
         return d1, d2
+
+    def _store_rating(self, player: Player, rating: float, rd: float,
+                      vol: float) -> None:
+        """Write one player's new rating, and with it their peak and title.
+
+        The moment a rated game ends is the only moment a title can be earned,
+        so the decision is made and stored here rather than derived at read
+        time — a title is a fact about a moment, not about today's rating, and
+        deriving it later would take it away again the moment the player
+        slipped below the threshold.
+        """
+        row = db.one("SELECT peak_rating, title FROM users WHERE id = ?",
+                     (player.id,))
+        # The peak only moves while the rating is established, so it records
+        # the best rating this account has actually held rather than the
+        # highest number it ever touched. Without that, a new account could
+        # spike far above its strength on two lucky results, settle back, and
+        # be handed the title afterwards on the strength of a rating nobody
+        # believed at the time -- which is the reading API.md rules out when
+        # it says the first time an *established* rating reaches the mark.
+        peak = max(row["peak_rating"], rating) if titles.established(rd) \
+            else row["peak_rating"]
+        title = titles.awarded(peak, rd, row["title"])
+        db.execute(
+            """UPDATE users SET rating=?, rd=?, vol=?, rated_games=rated_games+1,
+               peak_rating=?, title=? WHERE id=?""",
+            (rating, rd, vol, peak, title, player.id))
+        player.rating, player.rd, player.vol, player.title = rating, rd, vol, title
 
     def _persist(self, deltas: tuple = (None, None)) -> None:
         db.execute(

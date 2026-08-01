@@ -3,6 +3,7 @@
   import { api } from './api';
   import { poll } from './poll';
   import { SPEEDS, SPEED_LABEL, clockLabel, reasonText, timeAgo } from './format';
+  import Title from './Title.svelte';
 
   /** "human" = games where neither player is an engine, "bot" = both are. */
   export let kind: 'human' | 'bot';
@@ -64,9 +65,11 @@
           <a class="row" href={'#/game/' + game.id}>
             <span class="mark live"><span class="pip"></span>LIVE</span>
             <span class="players">
+              <Title title={game.first.title} />
               <span class="name">{game.first.username}</span>
               <span class="rt">{game.first.rating}</span>
               <span class="vs">vs</span>
+              <Title title={game.second.title} />
               <span class="name">{game.second.username}</span>
               <span class="rt">{game.second.rating}</span>
             </span>
@@ -80,11 +83,13 @@
           <a class="row" href={'#/game/' + game.id}>
             <span class="mark score" title={reasonText(game.reason)}>{score(game)}</span>
             <span class="players">
+              <Title title={game.first.title} />
               <span class="name" class:winner={won(game, 'first')}>
                 {game.first.username}
               </span>
               <span class="rt">{game.first.rating}</span>
               <span class="vs">vs</span>
+              <Title title={game.second.title} />
               <span class="name" class:winner={won(game, 'second')}>
                 {game.second.username}
               </span>
