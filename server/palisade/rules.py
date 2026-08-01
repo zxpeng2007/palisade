@@ -50,6 +50,24 @@ def replay(tokens: list[str]) -> np.ndarray:
     return st
 
 
+def replay_views(tokens: list[str]) -> list[dict]:
+    """Every position of a game, oldest first, index 0 being the start.
+
+    Lets a client show any earlier moment without implementing the rules —
+    which matters most for a spectator who arrived half way through and has
+    no other way to know what came before.
+    """
+    st = fr.initial_state()
+    scratch = fr.make_scratch()
+    out = [view(st)]
+    for t in tokens:
+        if fr.winner(st) >= 0:
+            raise IllegalMove(f"move after game end: {t}")
+        apply_token(st, t, scratch)
+        out.append(view(st))
+    return out
+
+
 def winner(st: np.ndarray) -> int:
     """-1 while running, else 0 (Player 1) or 1 (Player 2)."""
     return int(fr.winner(st))

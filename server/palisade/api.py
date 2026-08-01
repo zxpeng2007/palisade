@@ -494,17 +494,38 @@ async def game_stream(game_id: str):
     return StreamingResponse(stream(), media_type="application/x-ndjson")
 
 
+def _moves_of(game_id: str) -> list[str] | None:
+    live = manager.get(game_id)
+    if live is not None:
+        return list(live.moves)
+    row = db.one("SELECT moves FROM games WHERE id = ?", (game_id,))
+    if row is None:
+        return None
+    return row["moves"].split(",") if row["moves"] else []
+
+
+@router.get("/game/{game_id}/views")
+async def game_views(game_id: str):
+    moves = _moves_of(game_id)
+    if moves is None:
+        raise HTTPException(404, "no such game")
+    return {"moves": ",".join(moves), "views": rules.replay_views(moves)}
+
+
 @router.get("/game/{game_id}")
 async def game_get(game_id: str):
     live = manager.get(game_id)
     if live is not None:
         full = live.full_msg()
         full["view"] = rules.view(live.st)
+        full["views"] = rules.replay_views(list(live.moves))
         return full
     full = _db_game_full(game_id)
     if full is None:
         raise HTTPException(404, "no such game")
     full["view"] = full["state"]["view"]
+    moves = full["state"]["moves"]
+    full["views"] = rules.replay_views(moves.split(",") if moves else [])
     return full
 
 

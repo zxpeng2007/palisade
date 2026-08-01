@@ -151,7 +151,8 @@ would leave those games visible nowhere.
 
 | method | path | notes |
 |---|---|---|
-| GET  | `/api/game/{id}` | finished or live game: metadata + move list |
+| GET  | `/api/game/{id}` | finished or live game: metadata, move list, and `views` |
+| GET  | `/api/game/{id}/views` | just the per-ply positions |
 | POST | `/api/game/{id}/move/{token}` | play a move; 400 with reason if illegal, not your turn, or the game is over |
 | POST | `/api/game/{id}/resign` | |
 | POST | `/api/game/{id}/abort` | only before ply 2; no rating change |
@@ -192,6 +193,17 @@ position — pawn squares, placed walls by token, walls in hand, and whose turn
 it is (`1`/`2`) — so clients need no rules implementation to draw the board.
 Engines will normally replay `moves` instead. `p1time`/`p2time` are seconds
 remaining, measured at send time.
+
+`GET /api/game/{id}` additionally returns `views`: one rendered position per
+ply, oldest first, so `views[0]` is the starting position and `views[k]` is
+the position after `k` moves. A client can therefore show any earlier moment
+of a game without implementing the rules — including a spectator who arrived
+half way through, who has no other way to know what came before. `views` is
+also available on its own at `GET /api/game/{id}/views`, which returns
+`{"moves": "...", "views": [...]}`.
+
+Live games include the positions played so far; each subsequent `gameState`
+carries the new `view`, so a client appends rather than refetching.
 `status`: `active` | `finished` | `aborted`. When `finished`, `winner` is
 `"first"`/`"second"` and `reason` is `mate` (goal reached), `resign`,
 `timeout`, or `abort`.

@@ -87,15 +87,46 @@ class Engine:
         dt = time.perf_counter() - t0
         self.rate = max(self.MIN_SIMS_PER_SEC, probe / dt if dt > 0 else 0.0)
 
-    def sims_for(self, clock: float | None) -> int:
-        """Simulations to fit the target think time, backed off in time trouble.
+    # A game here runs about sixty plies, so thirty moves a side. Budgeting
+    # against a few more than that leaves the clock with something in hand at
+    # the point where games usually end, without hoarding time that is only
+    # useful if the game is unusually long.
+    EXPECTED_MOVES = 34
+    # Never divide by fewer than this: as the estimate runs out the budget
+    # becomes a fixed share of what is left, which decays but never reaches
+    # zero, so the clock cannot be spent to nothing in one move.
+    MIN_MOVES_LEFT = 8
+    # Most of the increment is spendable — it arrives after every move — but
+    # not all of it, or the clock never recovers from a slow patch.
+    INCREMENT_SHARE = 0.8
+    # Hard ceiling on any single move, whatever the arithmetic says.
+    MAX_CLOCK_SHARE = 0.2
 
-        The clock/20 ceiling keeps a low clock safe: losing on time is a real
-        way to lose these games.
+    def sims_for(self, clock: float | None, increment: float = 0.0,
+                 ply: int = 0) -> int:
+        """Simulations to fit a budget drawn from the actual time control.
+
+        The old rule was a flat cap with a clock/20 floor, which ignored the
+        increment and so treated 15+10 exactly like 5+3: it spent ten seconds
+        a move in both, far too slow for the short one and leaving most of the
+        long one unused. Time controls here span 1+0 to 15+10, a factor of
+        twenty in what a move is worth.
+
+        What a move is actually worth is the clock spread over the moves still
+        to play, plus the increment, which is income rather than capital. The
+        moves-left estimate shrinks as the game goes on, so the budget grows
+        into the endgame the way a player's does.
         """
-        target = self.think_seconds
-        if clock is not None:
-            target = min(target, clock / 20.0)
+        if clock is None:
+            # No clock on the wire — the archived-game case. Fall back to the
+            # ceiling rather than guessing at a budget from nothing.
+            target = self.think_seconds
+        else:
+            moves_left = max(self.MIN_MOVES_LEFT,
+                             self.EXPECTED_MOVES - ply // 2)
+            target = clock / moves_left + increment * self.INCREMENT_SHARE
+            target = min(target, clock * self.MAX_CLOCK_SHARE)
+        target = min(target, self.think_seconds)
         return int(max(256, min(self.max_sims, target * self.rate)))
 
     def choose(self, st: np.ndarray, sims: int) -> tuple[int, float, np.ndarray]:
@@ -329,11 +360,15 @@ class Bot:
                 log(f"game {game_id}: gone (404)")
                 return True
             resp.raise_for_status()
+            increment = 0.0
             for line in resp.iter_lines():
                 if not line.strip():
                     continue
                 msg = json.loads(line)
                 if msg.get("type") == "gameFull":
+                    # Only this line carries the time control; later states
+                    # report the clocks but not the increment.
+                    increment = float(msg.get("clock", {}).get("increment", 0))
                     state = msg["state"]
                 elif msg.get("type") == "gameState":
                     state = msg
@@ -345,10 +380,11 @@ class Bot:
                         f"winner {state.get('winner')} ({state.get('reason')}) "
                         f"-- we {'won' if won else 'did not win'}")
                     return True
-                self.consider_move(game_id, seat, state)
+                self.consider_move(game_id, seat, state, increment)
         return False
 
-    def consider_move(self, game_id: str, seat: int, state: dict) -> None:
+    def consider_move(self, game_id: str, seat: int, state: dict,
+                      increment: float = 0.0) -> None:
         moves = [t for t in state["moves"].split(",") if t]
         if (len(moves) % 2 == 0) != (seat == 0):
             return                      # opponent to move
@@ -361,7 +397,7 @@ class Bot:
             log(f"game {game_id}: cannot rebuild position: {exc}")
             return
         my_time = state.get("p1time" if seat == 0 else "p2time")
-        sims = self.engine.sims_for(my_time)
+        sims = self.engine.sims_for(my_time, increment, len(moves))
         t0 = time.perf_counter()
         action, value, visits = self.engine.choose(st, sims)
         think = time.perf_counter() - t0
