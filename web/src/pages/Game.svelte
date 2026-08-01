@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { afterUpdate, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import { send, subscribe } from '../lib/ws';
   import { account } from '../lib/session';
   import Board from '../lib/Board.svelte';
   import Clock from '../lib/Clock.svelte';
+  import MoveList from '../lib/MoveList.svelte';
 
   export let id: string;
 
@@ -13,15 +14,25 @@
   // silent; the REST fetch below supplies their final view + move list.
   let full: any = null; // {id, rated, clock, first, second}
   let state: any = null; // latest {moves, p1time, p2time, status, winner, reason}
-  let view: any = null;
+  let view: any = null; // the position the game is actually in
   let legal: string[] | null = null;
   let wsSeen = false;
   let loadError = '';
   let flashMsg = '';
   let flashTimer: ReturnType<typeof setTimeout>;
   let confirming: 'resign' | 'abort' | null = null;
-  let movesEl: HTMLElement;
-  let renderedPlies = 0;
+
+  // -- position history -----------------------------------------------------
+  // known[k] is the rendered position after k moves (API.md `views`). It fills
+  // from two directions — the REST snapshot brings 0..n in one go, the socket
+  // appends one per move — so a hole in the middle is possible until both have
+  // landed. `have` is the length of the hole-free prefix; navigation needs it
+  // to cover every ply, otherwise there is a moment we simply cannot draw.
+  let known: any[] = [];
+  let have = 0;
+  let latest = 0; // ply the game itself is at
+  let ply = 0; // ply the viewer is looking at
+  let repaired = false;
 
   $: me = $account ? $account.username : null;
   // Declared, not inferred: the board's `color` prop is a union, and a bare
@@ -42,16 +53,19 @@
   $: top = bottom === 'first' ? 'second' : 'first';
   $: topP = full ? full[top] : null;
   $: bottomP = full ? full[bottom] : null;
-  $: pairs = chunk(moves);
   $: tc = full ? clockLabel(full.clock) : '';
 
-  function chunk(ms: string[]) {
-    const out = [];
-    for (let i = 0; i < ms.length; i += 2) {
-      out.push({ n: i / 2 + 1, a: ms[i], b: ms[i + 1] ?? '' });
-    }
-    return out;
-  }
+  $: canNavigate = have > latest; // every ply 0..latest is drawable
+  $: shownPly = canNavigate ? ply : latest;
+  $: shownView = (canNavigate && known[shownPly]) || view;
+  $: atLatest = shownPly >= latest;
+  $: plyLabel =
+    shownPly === 0 ? 'the start position' : `move ${shownPly} of ${latest}`;
+
+  // THE read-only rule: a move is legal for one position only, so the board
+  // may accept clicks solely when the viewer is looking at the position the
+  // server is in. Scrubbed back, it is a picture.
+  $: boardLegal = atLatest && myColor && active ? legal : null;
 
   function clockLabel(c: any): string {
     const min = Math.round((c.initial / 60) * 10) / 10;
@@ -63,10 +77,57 @@
   $: topTime = state ? ((top === 'first' ? state.p1time : state.p2time) ?? null) : null;
   $: bottomTime = state ? ((bottom === 'first' ? state.p1time : state.p2time) ?? null) : null;
 
+  function plyOf(moveList: string): number {
+    return moveList ? moveList.split(',').length : 0;
+  }
+
+  function record(n: number, v: any): void {
+    if (!v || known[n]) return; // positions never change; first writer wins
+    known[n] = v;
+    while (known[have]) have++;
+  }
+
+  function adopt(list: any): void {
+    if (!Array.isArray(list)) return;
+    for (let i = 0; i < list.length; i++) record(i, list[i]);
+  }
+
   function applyState(s: any, lg: string[] | null) {
+    const n = plyOf(s.moves);
+    const following = ply === latest; // read before `latest` moves on
     state = s;
-    if (s.view) view = s.view;
+    latest = n;
+    if (s.view) {
+      view = s.view;
+      record(n, s.view);
+    }
     legal = lg;
+    // Someone reviewing an earlier position keeps their place — a new move
+    // must never yank the board out from under them. Only a viewer already at
+    // the end rides along.
+    if (following) ply = n;
+  }
+
+  function goto(p: number): void {
+    if (!canNavigate) return;
+    ply = Math.max(0, Math.min(latest, p)); // re-selecting the same ply is a no-op
+  }
+
+  function onKey(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    const el = e.target as HTMLElement | null;
+    const tag = el ? el.tagName : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (el && el.isContentEditable) return;
+    // `ply` and `latest`, not the derived `shownPly`: reactive values settle
+    // after the handler returns, so a held-down arrow key would otherwise
+    // compute every repeat from the same stale ply and move only one step.
+    if (e.key === 'ArrowLeft') goto(ply - 1);
+    else if (e.key === 'ArrowRight') goto(ply + 1);
+    else if (e.key === 'Home') goto(0);
+    else if (e.key === 'End') goto(latest);
+    else return;
+    e.preventDefault(); // arrows and Home/End otherwise scroll the page
   }
 
   function onGameMsg(msg: any) {
@@ -95,18 +156,41 @@
     try {
       const g = await api('GET', '/api/game/' + id);
       // A websocket gameFull may already have landed with fresher state and
-      // the legal list; never clobber it with this snapshot.
+      // the legal list; never clobber it with this snapshot. The history is
+      // another matter — it arrives nowhere else, so always take it.
       if (!wsSeen) {
         full = g;
         applyState(g.state, null);
         if (g.view) view = g.view; // REST puts the view beside state, not in it
       }
+      adopt(g.views);
+      if (have <= latest) repair();
     } catch (e: any) {
       if (!wsSeen) loadError = e.message;
     }
   }
 
+  /** Close a hole left by a snapshot older than the socket's first message.
+   *
+   *  The missing plies were played before we subscribed, so no later socket
+   *  message will ever supply them. One repeat fetch is enough and cannot
+   *  loop: the socket's first ply is fixed, and any fetch issued after that
+   *  message arrived is answered from a position at least that far along. */
+  async function repair() {
+    if (repaired) return;
+    repaired = true;
+    try {
+      adopt((await api('GET', `/api/game/${id}/views`)).views);
+    } catch {
+      // An older server without the endpoint. Navigation stays off and the
+      // live position still draws — the game is watchable either way.
+    }
+  }
+
   function play(token: string) {
+    // Belt and braces behind `boardLegal`: a move sent for a position the
+    // server has already left is either illegal or, worse, legal by accident.
+    if (!atLatest) return;
     send({ t: 'move', game: id, move: token });
     legal = null; // no second move until the server says it is our turn again
   }
@@ -126,19 +210,14 @@
   onMount(() => {
     const unGame = subscribe('game:' + id, onGameMsg);
     const unUser = subscribe('user', onUserMsg);
+    window.addEventListener('keydown', onKey);
     load();
     return () => {
       unGame();
       unUser();
+      window.removeEventListener('keydown', onKey);
       clearTimeout(flashTimer);
     };
-  });
-
-  afterUpdate(() => {
-    if (movesEl && moves.length !== renderedPlies) {
-      renderedPlies = moves.length;
-      movesEl.scrollTop = movesEl.scrollHeight;
-    }
   });
 </script>
 
@@ -149,12 +228,18 @@
 {:else}
   <div class="game">
     <div class="board-col">
-      <Board
-        {view}
-        legal={myColor && active ? legal : null}
-        color={myColor}
-        onMove={play}
-      />
+      <Board view={shownView} legal={boardLegal} color={myColor} onMove={play} />
+
+      {#if canNavigate && latest > 0}
+        <div class="scrub" class:behind={!atLatest}>
+          <span>Viewing {plyLabel}</span>
+          {#if !atLatest && active}
+            <button class="primary" on:click={() => goto(latest)}>
+              {legal && myColor ? 'Return to live to move' : 'Return to live'}
+            </button>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <aside>
@@ -184,23 +269,13 @@
         />
       </div>
 
-      <div class="moves panel" bind:this={movesEl}>
-        {#if pairs.length === 0}
-          <span class="dim">No moves yet.</span>
-        {:else}
-          <table>
-            <tbody>
-              {#each pairs as p (p.n)}
-                <tr>
-                  <td class="num dim">{p.n}.</td>
-                  <td>{p.a}</td>
-                  <td>{p.b}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {/if}
-      </div>
+      <MoveList
+        {moves}
+        {latest}
+        ply={shownPly}
+        navigable={canNavigate}
+        onSelect={goto}
+      />
 
       <div class="seat">
         <div class="who">
@@ -222,12 +297,18 @@
       </div>
 
       {#if state.status !== 'active'}
+        <!-- The result belongs to the game, not to the position on screen, so
+             it stays up during replay — but it must not be read as a caption
+             for an earlier position. -->
         <div class="banner panel">
           {#if state.status === 'aborted'}
             Game aborted
           {:else if state.winner}
             <strong>{full[state.winner].username}</strong>
             wins {reasonText(state.reason)}
+          {/if}
+          {#if !atLatest}
+            <div class="note dim">Showing {plyLabel}, not the final position.</div>
           {/if}
         </div>
       {:else if myColor}
@@ -297,25 +378,28 @@
   .delta.up {
     color: var(--accent);
   }
-  .moves {
-    height: 260px;
-    overflow-y: auto;
-    padding: 8px 12px;
+  .scrub {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 2px 4px;
+    font-size: 0.9rem;
+    color: var(--text-dim);
   }
-  .moves table {
-    width: 100%;
-    border-collapse: collapse;
-    font-variant-numeric: tabular-nums;
-  }
-  .moves td {
-    padding: 1px 6px 1px 0;
-  }
-  .moves td.num {
-    width: 2.5em;
+  .scrub.behind {
+    color: var(--text);
+    border-left: 3px solid var(--accent);
+    padding-left: 8px;
   }
   .banner {
     text-align: center;
     border-color: var(--accent);
+  }
+  .banner .note {
+    font-size: 0.85rem;
   }
   .controls {
     display: flex;
