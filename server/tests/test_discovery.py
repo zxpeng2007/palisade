@@ -39,9 +39,13 @@ CLASSICAL = (1800, 0)
 
 
 def register(client, name):
-    r = client.post("/api/register",
-                    json={"username": name, "password": "hunter22valid"})
+    r = client.post("/api/register", json={
+        "username": name, "password": "hunter22valid",
+        "email": f"{name}@example.test"})
     assert r.status_code == 200, r.text
+    # Leaderboards need rated games, which need a confirmed address. The
+    # verification flow itself is covered in test_email.py.
+    db.execute("UPDATE users SET email_verified = 1 WHERE username = ?", (name,))
 
 
 def token_for(client, name):

@@ -22,9 +22,14 @@ def client(tmp_path_factory):
 
 
 def register(client, name):
-    r = client.post("/api/register",
-                    json={"username": name, "password": "hunter22valid"})
+    r = client.post("/api/register", json={
+        "username": name, "password": "hunter22valid",
+        "email": f"{name}@example.test"})
     assert r.status_code == 200, r.text
+    # Rated play is gated on a confirmed address; these tests are about
+    # ratings and game state, so confirm it directly rather than round-trip
+    # a token. test_email.py owns the verification flow.
+    db.execute("UPDATE users SET email_verified = 1 WHERE username = ?", (name,))
     return r
 
 

@@ -33,8 +33,13 @@ def session_for(client, name, password="hunter22valid"):
     The client's cookie jar is cleared so the one shared TestClient can hold
     several logged-in identities at once.
     """
-    r = client.post("/api/register", json={"username": name, "password": password})
+    r = client.post("/api/register", json={
+        "username": name, "password": password,
+        "email": f"{name}@example.test"})
     assert r.status_code == 200, r.text
+    # Rated seeks are gated on a confirmed address; these tests are about the
+    # socket, so confirm it directly. test_email.py owns the actual flow.
+    db.execute("UPDATE users SET email_verified = 1 WHERE username = ?", (name,))
     sid = client.cookies.get(auth.SESSION_COOKIE)
     client.cookies.clear()
     return {"cookie": f"{auth.SESSION_COOKIE}={sid}"}

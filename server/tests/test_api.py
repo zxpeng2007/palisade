@@ -25,8 +25,14 @@ def client(tmp_path_factory, module_mocker=None):
 
 
 def register(client, name, password="hunter22valid"):
-    r = client.post("/api/register", json={"username": name, "password": password})
+    r = client.post("/api/register", json={
+        "username": name, "password": password,
+        "email": f"{name}@example.test"})
     assert r.status_code == 200, r.text
+    # These tests are about games, not about email. Rated play and bot
+    # upgrades are gated on a confirmed address, so fixtures confirm it
+    # directly; the verification flow itself is covered in test_email.py.
+    db.execute("UPDATE users SET email_verified = 1 WHERE username = ?", (name,))
     return r
 
 
@@ -46,12 +52,19 @@ SCRIPT = ["e2", "ha1", "e3", "d9", "e4", "e9", "e5", "d9",
 
 
 def test_register_validation(client):
-    r = client.post("/api/register", json={"username": "x", "password": "hunter22valid"})
+    good = {"username": "okname", "password": "hunter22valid",
+            "email": "okname@example.test"}
+    r = client.post("/api/register", json={**good, "username": "x"})
     assert r.status_code == 400 and "error" in r.json()
-    r = client.post("/api/register", json={"username": "okname", "password": "short"})
+    r = client.post("/api/register", json={**good, "password": "short"})
+    assert r.status_code == 400
+    r = client.post("/api/register", json={**good, "email": "not-an-address"})
     assert r.status_code == 400
     register(client, "okname")
-    r = client.post("/api/register", json={"username": "OKNAME", "password": "hunter22valid"})
+    # A distinct address, so this collides on the username and not the email.
+    r = client.post("/api/register", json={
+        "username": "OKNAME", "password": "hunter22valid",
+        "email": "other@example.test"})
     assert r.status_code == 409  # case-insensitive collision
     client.cookies.clear()
 
