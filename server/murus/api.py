@@ -9,7 +9,7 @@ import os
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
-from murus import auth, db, limits, mail, review, rules, speed
+from murus import auth, db, limits, mail, review, rules, speed, stats
 from murus.events import hub, is_closed, presence_dec, presence_inc
 from murus.games import GameError, Player, SEAT_NAMES, manager
 from murus.lobby import check_clock, lobby
@@ -216,6 +216,12 @@ async def token_list(request: Request):
         (user["id"],))
     return [{"name": r["name"], "scopes": r["scopes"].split(","),
              "created": r["created"]} for r in rows]
+
+
+@router.get("/stats")
+async def site_stats():
+    """Aggregates for anyone watching the site, including its own operator."""
+    return stats.collect()
 
 
 @router.get("/leaderboard")
