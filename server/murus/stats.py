@@ -14,6 +14,7 @@ arrived this morning or nobody has visited in a month.
 from __future__ import annotations
 
 from murus import db, speed
+from murus.events import online_ids
 
 
 def _scalar(sql: str, args: tuple = ()) -> int:
@@ -68,7 +69,21 @@ def collect() -> dict:
         f"FROM games WHERE {finished} AND moves != '' "
         f"ORDER BY plies DESC LIMIT 1")
 
+    # Who is actually connected right now. The only way to tell from outside
+    # whether the house bot is alive: a site with no games might be quiet, or
+    # might have a dead engine, and those need different responses.
+    online = online_ids()
+    engines_online = []
+    if online:
+        marks = ",".join("?" * len(online))
+        engines_online = [
+            r["username"] for r in db.query(
+                f"SELECT username FROM users WHERE is_bot = 1 AND id IN ({marks})",
+                tuple(online))
+        ]
+
     return {
+        "online": {"total": len(online), "engines": sorted(engines_online)},
         "users": {
             "total": users_total,
             "human": users_total - bots,
