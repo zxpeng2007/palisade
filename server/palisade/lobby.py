@@ -15,6 +15,7 @@ from random import Random
 
 from fastapi import HTTPException
 
+from palisade import speed
 from palisade.events import hub, online_ids
 from palisade.games import Player, manager
 
@@ -47,6 +48,8 @@ class Seek:
     def public(self) -> dict:
         return {"username": self.player.username,
                 "rating": round(self.player.rating), "rated": self.rated,
+                "bot": self.player.bot,
+                "speed": speed.category(self.initial, self.increment),
                 "clock": {"initial": self.initial, "increment": self.increment}}
 
 
@@ -173,6 +176,7 @@ class Lobby:
                           "first": g.players[0].public(),
                           "second": g.players[1].public(),
                           "rated": g.rated, "ply": len(g.moves),
+                          "speed": speed.category(g.initial, g.increment),
                           "clock": {"initial": g.initial, "increment": g.increment}})
         return {"type": "lobby",
                 "seeks": [s.public() for s in self.seeks.values()],

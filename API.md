@@ -90,6 +90,58 @@ Errors are JSON: `{"error": "human-readable reason"}` with a 4xx status.
 
 `clock.initial` is seconds (60–3600), `clock.increment` seconds (0–60).
 
+### Speed categories
+
+Time controls are bucketed by their estimated duration, `initial + 40 ×
+increment` seconds, the same rule Lichess uses:
+
+| speed | estimated duration |
+|---|---|
+| `bullet` | under 180 s |
+| `blitz` | under 480 s |
+| `rapid` | under 1500 s |
+| `classical` | 1500 s and over |
+
+So 1+0 is bullet, 3+0 and 5+3 are blitz, 15+10 is rapid, 30+0 is classical.
+Speed appears on every game and seek object as `"speed"`, and is a filter on
+the endpoints below.
+
+### Leaderboards and top games
+
+Both are public and need no authentication.
+
+    GET /api/leaderboard?kind=human|bot|all&speed=<speed>&limit=20
+
+Players ranked by rating, highest first. `kind` splits the ladder into people
+and engines (default `all`); `speed` restricts the ranking to players with a
+rated game at that speed. Provisional players (RD above 110) are ranked last
+regardless of rating, since their numbers mean little.
+
+```json
+{"kind":"bot","speed":null,"players":[
+  {"rank":1,"username":"PalisadeBot","rating":1712,"provisional":false,"bot":true,"games":38}
+]}
+```
+
+    GET /api/games/top?kind=human|bot|all&limit=8
+
+Games worth watching, newest-first within each group and ranked by the average
+rating of the two players:
+
+```json
+{"live":{"blitz":[{"id":"xyz789","first":{...},"second":{...},"rated":true,
+                   "ply":24,"speed":"blitz","clock":{"initial":300,"increment":3},
+                   "avgRating":1680}],
+         "rapid":[]},
+ "recent":{"blitz":[{"id":"abc123","first":{...},"second":{...},"rated":true,
+                     "speed":"blitz","winner":"first","reason":"mate",
+                     "avgRating":1704,"finished":"2026-08-01 12:04:11"}]}}
+```
+
+`live` holds games in progress; `recent` holds finished ones. Both are keyed by
+speed, and a speed with nothing to show is omitted. `kind` filters to games
+where both players are engines (`bot`), neither is (`human`), or any (`all`).
+
 ### Playing
 
 | method | path | notes |

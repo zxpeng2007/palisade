@@ -9,7 +9,7 @@ import os
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
-from palisade import auth, db, limits, rules
+from palisade import auth, db, limits, rules, speed
 from palisade.events import hub, is_closed, presence_dec, presence_inc
 from palisade.games import GameError, Player, SEAT_NAMES, manager
 from palisade.lobby import check_clock, lobby
@@ -139,6 +139,121 @@ async def token_list(request: Request):
         (user["id"],))
     return [{"name": r["name"], "scopes": r["scopes"].split(","),
              "created": r["created"]} for r in rows]
+
+
+@router.get("/leaderboard")
+async def leaderboard(kind: str = "all", speed_filter: str | None = None,
+                      limit: int = 20, request: Request = None):
+    # `speed` is the query name; FastAPI would shadow the imported module.
+    want_speed = (request.query_params.get("speed") if request else None) or speed_filter
+    if kind not in ("all", "human", "bot"):
+        raise HTTPException(400, "kind must be all, human, or bot")
+    if want_speed is not None and want_speed not in speed.ORDER:
+        raise HTTPException(400, f"speed must be one of {list(speed.ORDER)}")
+    limit = max(1, min(100, limit))
+
+    where = ["u.rated_games > 0"]
+    args: list = []
+    if kind == "bot":
+        where.append("u.is_bot = 1")
+    elif kind == "human":
+        where.append("u.is_bot = 0")
+    rows = db.query(
+        f"""SELECT u.* FROM users u WHERE {' AND '.join(where)}
+            ORDER BY u.rd > 110, u.rating DESC LIMIT ?""",
+        (*args, limit * 4 if want_speed else limit))
+
+    players = []
+    for r in rows:
+        u = dict(r)
+        if want_speed is not None:
+            # Rank only players with a rated game at this speed. Cheap because
+            # the game table is small; revisit if it ever is not.
+            played = False
+            for g in db.query(
+                """SELECT initial, increment FROM games
+                   WHERE rated = 1 AND status = 'finished'
+                     AND (p1 = ? OR p2 = ?)""", (u["id"], u["id"])):
+                if speed.category(g["initial"], g["increment"]) == want_speed:
+                    played = True
+                    break
+            if not played:
+                continue
+        players.append({
+            "rank": len(players) + 1,
+            "username": u["username"],
+            "rating": round(u["rating"]),
+            "provisional": u["rd"] > 110,
+            "bot": bool(u["is_bot"]),
+            "games": u["rated_games"],
+        })
+        if len(players) >= limit:
+            break
+    return {"kind": kind, "speed": want_speed, "players": players}
+
+
+@router.get("/games/top")
+async def games_top(kind: str = "all", limit: int = 8):
+    if kind not in ("all", "human", "bot"):
+        raise HTTPException(400, "kind must be all, human, or bot")
+    limit = max(1, min(30, limit))
+
+    def keep(a_bot: bool, b_bot: bool) -> bool:
+        if kind == "bot":
+            return a_bot and b_bot
+        if kind == "human":
+            return not a_bot and not b_bot
+        return True
+
+    live: dict[str, list] = {}
+    for g in manager.live.values():
+        a, b = g.players[0].public(), g.players[1].public()
+        if not keep(a["bot"], b["bot"]):
+            continue
+        cat = speed.category(g.initial, g.increment)
+        live.setdefault(cat, []).append({
+            "id": g.id, "first": a, "second": b, "rated": g.rated,
+            "ply": len(g.moves), "speed": cat,
+            "clock": {"initial": g.initial, "increment": g.increment},
+            "avgRating": round((a["rating"] + b["rating"]) / 2),
+        })
+
+    recent: dict[str, list] = {}
+    for row in db.query(
+        """SELECT g.*, u1.username AS p1name, u1.is_bot AS p1bot,
+                  u2.username AS p2name, u2.is_bot AS p2bot
+           FROM games g JOIN users u1 ON u1.id = g.p1 JOIN users u2 ON u2.id = g.p2
+           WHERE g.status = 'finished'
+           ORDER BY g.finished DESC LIMIT 300"""
+    ):
+        g = dict(row)
+        if not keep(bool(g["p1bot"]), bool(g["p2bot"])):
+            continue
+        cat = speed.category(g["initial"], g["increment"])
+        bucket = recent.setdefault(cat, [])
+        if len(bucket) >= limit:
+            continue
+        r1 = g["p1_rating"] or 1500
+        r2 = g["p2_rating"] or 1500
+        bucket.append({
+            "id": g["id"],
+            "first": {"username": g["p1name"], "rating": round(r1),
+                      "bot": bool(g["p1bot"])},
+            "second": {"username": g["p2name"], "rating": round(r2),
+                       "bot": bool(g["p2bot"])},
+            "rated": bool(g["rated"]), "speed": cat,
+            "winner": SEAT_NAMES[g["winner"]] if g["winner"] is not None else None,
+            "reason": g["reason"],
+            "clock": {"initial": g["initial"], "increment": g["increment"]},
+            "avgRating": round((r1 + r2) / 2),
+            "finished": g["finished"],
+        })
+
+    for bucket in live.values():
+        bucket.sort(key=lambda x: -x["avgRating"])
+        del bucket[limit:]
+    return {"live": {k: v for k, v in live.items() if v},
+            "recent": {k: v for k, v in recent.items() if v}}
 
 
 @router.get("/user/{username}")
