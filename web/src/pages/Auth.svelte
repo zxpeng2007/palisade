@@ -4,6 +4,7 @@
   let mode: 'login' | 'register' = 'login';
   let username = '';
   let password = '';
+  let email = '';
   let error = '';
   let busy = false;
 
@@ -17,7 +18,7 @@
     busy = true;
     try {
       if (mode === 'login') await login(username, password);
-      else await register(username, password);
+      else await register(username, password, email);
       location.hash = '#/';
     } catch (e: any) {
       error = e.message;
@@ -64,6 +65,20 @@
     </label>
     {#if mode === 'register'}
       <p class="dim hint">At least 8 characters</p>
+      <label>
+        Email
+        <input
+          type="email"
+          bind:value={email}
+          autocomplete="email"
+          spellcheck="false"
+          required
+        />
+      </label>
+      <p class="dim hint">
+        We send a verification link to this address. Rated games and engine
+        accounts need it confirmed; casual games do not.
+      </p>
     {/if}
 
     {#if error}
@@ -74,6 +89,13 @@
       {mode === 'login' ? 'Sign in' : 'Create account'}
     </button>
   </form>
+
+  {#if mode === 'register'}
+    <p class="dim terms">
+      Playing here means playing by the <a href="#/fairplay">fair-play rules</a>:
+      your own moves on a human account, a declared account for an engine.
+    </p>
+  {/if}
 </div>
 
 <style>
@@ -118,5 +140,11 @@
   .error {
     color: var(--danger);
     margin: 0;
+  }
+  .terms {
+    margin: 16px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 0.85rem;
   }
 </style>

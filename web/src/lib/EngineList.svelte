@@ -3,6 +3,7 @@
   import { needSignIn } from './session';
   import { flash } from './notify';
   import { PRESETS } from './format';
+  import RatedNote from './RatedNote.svelte';
 
   /** Engines currently connected, from the lobby snapshot. */
   export let bots: any[] = [];
@@ -75,6 +76,7 @@
           </label>
           <button class="primary" on:click={sendChallenge}>Send</button>
           <button on:click={() => (target = null)}>Cancel</button>
+          <div class="full"><RatedNote action="challenge" /></div>
         </div>
       {/if}
     {/each}
@@ -111,5 +113,9 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
+  }
+  /* The rated note is a sentence, not a control: its own line under the row. */
+  .full {
+    flex: 1 0 100%;
   }
 </style>

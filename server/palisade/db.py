@@ -23,7 +23,12 @@ CREATE TABLE IF NOT EXISTS users (
     rd REAL NOT NULL DEFAULT 350,
     vol REAL NOT NULL DEFAULT 0.06,
     rated_games INTEGER NOT NULL DEFAULT 0,
-    created TEXT NOT NULL DEFAULT (datetime('now'))
+    created TEXT NOT NULL DEFAULT (datetime('now')),
+    -- Nullable: the accounts that predate verification have no address, and
+    -- ALTER TABLE cannot add these to an existing table any other way. Kept
+    -- last so a migrated database and a fresh one have identical layouts.
+    email TEXT,
+    email_verified INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
@@ -37,6 +42,14 @@ CREATE TABLE IF NOT EXISTS tokens (
     scopes TEXT NOT NULL,
     created TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS email_tokens (
+    hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    purpose TEXT NOT NULL,
+    created TEXT NOT NULL DEFAULT (datetime('now')),
+    expires TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS email_tokens_user ON email_tokens(user_id, purpose);
 CREATE TABLE IF NOT EXISTS games (
     id TEXT PRIMARY KEY,
     p1 INTEGER NOT NULL REFERENCES users(id),
@@ -61,6 +74,32 @@ _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Bring an already-populated database up to the current schema.
+
+    Every step is additive and guarded by its own presence check, so this runs
+    on each startup, costs a PRAGMA, and never touches a row twice.
+    """
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+    if "email" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    if "email_verified" not in columns:
+        conn.execute(
+            "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+        # Grandfathering, and the only moment it can happen: every account that
+        # exists as the column is created signed up when no address was asked
+        # for. Shutting them out of rated play to enforce a rule invented
+        # afterwards would punish them for our change of mind. Accounts created
+        # from here on land in the DEFAULT 0 and must confirm like everyone else.
+        conn.execute("UPDATE users SET email_verified = 1")
+    # Uniqueness lives in an index because ALTER TABLE cannot add a UNIQUE
+    # column; a fresh database gets it here too so both routes agree. NULLs do
+    # not collide in SQLite, which is exactly what the address-less
+    # grandfathered accounts need.
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email "
+                 "ON users(email COLLATE NOCASE)")
+
+
 def connect(path: str | None = None) -> sqlite3.Connection:
     global _conn
     if _conn is not None:
@@ -71,6 +110,7 @@ def connect(path: str | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(_SCHEMA)
+    _migrate(conn)
     conn.commit()
     _conn = conn
     return conn

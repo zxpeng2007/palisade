@@ -9,6 +9,9 @@ export interface Account {
   rating: number;
   rd: number;
   games: number;
+  /** Null on accounts that predate verification; those are verified anyway. */
+  email: string | null;
+  emailVerified: boolean;
 }
 
 /** undefined = not yet checked; null = signed out. */
@@ -23,6 +26,25 @@ export async function boot(): Promise<void> {
   }
 }
 
+/** Re-read the account after the server changed something about it — an
+ *  address verified or swapped. Unlike boot() a failure here leaves the
+ *  signed-in state alone: a blip on this call is not a sign-out. */
+export async function refresh(): Promise<void> {
+  try {
+    account.set(await api('GET', '/api/account'));
+  } catch {
+    // Keep whatever we last knew; the next page load will settle it.
+  }
+}
+
+/** True when the server will refuse rated play and bot upgrades for want of a
+ *  confirmed address. Only an explicit false counts, so a grandfathered
+ *  account (no address, verified true) and any server that does not send the
+ *  field at all are both left alone — the UI never invents a block. */
+export function unverified(a: Account | null | undefined): boolean {
+  return !!a && a.emailVerified === false;
+}
+
 export async function login(username: string, password: string): Promise<void> {
   account.set(await api('POST', '/api/login', { username, password }));
   reconnect(); // the socket authenticates by cookie at handshake time
@@ -30,9 +52,10 @@ export async function login(username: string, password: string): Promise<void> {
 
 export async function register(
   username: string,
-  password: string
+  password: string,
+  email: string
 ): Promise<void> {
-  account.set(await api('POST', '/api/register', { username, password }));
+  account.set(await api('POST', '/api/register', { username, password, email }));
   reconnect();
 }
 

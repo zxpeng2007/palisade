@@ -101,3 +101,33 @@ wins any contention.
 Hardening is ufw with SSH only — the tunnel is outbound, so nothing else needs
 to be reachable — plus key-only SSH and unattended upgrades. `ss -tlnp` should
 show the arena bound to `127.0.0.1:8000` and nothing else public.
+
+## SSH access
+
+The server is reached as a named, non-root account:
+
+    ssh -i <deploy-key> steven@<host>
+
+Root login over SSH is closed (`PermitRootLogin no`), password and
+keyboard-interactive authentication are off, and `AllowUsers` names the single
+admin account, so a stolen key lands on an auditable account rather than
+directly on uid 0. `MaxAuthTries 3` with a 20-second grace, fail2ban banning
+for an hour after four failures, and agent/TCP/X11 forwarding all disabled —
+nothing in this deployment needs to forward anything, and a compromised
+session should not be able to relay through the box or reach services bound to
+loopback.
+
+Port 22 stays open to the internet. With passwords off that is a scanner
+knocking on a door with no handle, and closing it to a single residential IP
+trades a small risk for a real chance of locking yourself out when the address
+changes.
+
+The deploy key should carry a passphrase, loaded into an agent for the session
+rather than left bare on disk:
+
+    ssh-keygen -p -f <deploy-key>     # set it, interactively, once
+    ssh-add <deploy-key>              # per session (or persistent on Windows)
+
+That protects the key at rest — backups, cloud sync, another account on the
+machine — which is the threat that matters, since anyone already inside a
+logged-in desktop session can use a loaded agent regardless.

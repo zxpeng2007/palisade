@@ -5,16 +5,37 @@
   import { note } from './lib/notify';
   import { connect, subscribe } from './lib/ws';
   import ModeSwitch from './lib/ModeSwitch.svelte';
+  import SiteFooter from './lib/SiteFooter.svelte';
+  import VerifyBanner from './lib/VerifyBanner.svelte';
   import Lobby from './pages/Lobby.svelte';
   import Engines from './pages/Engines.svelte';
   import Game from './pages/Game.svelte';
   import Auth from './pages/Auth.svelte';
   import Profile from './pages/Profile.svelte';
+  import FairPlay from './pages/FairPlay.svelte';
+  import Verify from './pages/Verify.svelte';
 
   interface Route {
-    page: 'lobby' | 'engines' | 'login' | 'game' | 'profile';
+    page: 'lobby' | 'engines' | 'login' | 'game' | 'profile' | 'fairplay' | 'verify';
     id?: string;
     name?: string;
+    token?: string;
+  }
+
+  /** The verification link is a hash route, and mailers write it either way:
+   *  #/verify/<token> and #/verify?token=<token> both work. A token left in
+   *  the real query string (…/?token=x#/verify) is picked up as a last resort,
+   *  since a link that arrives in one piece should not be wasted. */
+  function verifyTokenFrom(rest: string): string {
+    if (rest.includes('=')) return new URLSearchParams(rest).get('token') ?? '';
+    if (rest) {
+      try {
+        return decodeURIComponent(rest);
+      } catch {
+        return rest; // a bad escape is for the server to reject, not us
+      }
+    }
+    return new URLSearchParams(location.search).get('token') ?? '';
   }
 
   function parse(hash: string): Route {
@@ -29,8 +50,12 @@
         return { page: 'lobby' };
       }
     }
+    if ((m = h.match(/^\/verify(?:[/?](.*))?$/))) {
+      return { page: 'verify', token: verifyTokenFrom(m[1] ?? '') };
+    }
     if (h === '/engines') return { page: 'engines' };
     if (h === '/login') return { page: 'login' };
+    if (h === '/fairplay') return { page: 'fairplay' };
     return { page: 'lobby' };
   }
 
@@ -96,6 +121,14 @@
   <ModeSwitch />
 </div>
 
+<!-- The verify page is where an unverified account is already dealing with
+     exactly this, so the reminder would only be in the way. -->
+{#if route.page !== 'verify'}
+  <div class="banner">
+    <VerifyBanner />
+  </div>
+{/if}
+
 <main>
   {#if route.page === 'game'}
     {#key route.id}
@@ -109,10 +142,18 @@
     {/key}
   {:else if route.page === 'engines'}
     <Engines />
+  {:else if route.page === 'fairplay'}
+    <FairPlay />
+  {:else if route.page === 'verify'}
+    {#key route.token}
+      <Verify token={route.token} />
+    {/key}
   {:else}
     <Lobby />
   {/if}
 </main>
+
+<SiteFooter />
 
 {#if $note}
   <div class="toast">{$note}</div>
@@ -147,6 +188,11 @@
   }
   .modebar {
     padding: 16px 16px 0;
+  }
+  /* Side gutters only: the banner sets its own width and disappears entirely
+     when there is nothing to say, leaving no gap behind. */
+  .banner {
+    padding: 0 16px;
   }
   main {
     max-width: 1100px;

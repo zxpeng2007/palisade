@@ -7,6 +7,7 @@
   import EngineList from '../lib/EngineList.svelte';
   import Leaderboard from '../lib/Leaderboard.svelte';
   import NotationDiagram from '../lib/NotationDiagram.svelte';
+  import RatedNote from '../lib/RatedNote.svelte';
   import Seeks from '../lib/Seeks.svelte';
   import TopGames from '../lib/TopGames.svelte';
 
@@ -141,6 +142,7 @@ for ev in lines("/api/stream/event"):
       <a href={REPO + '/tree/main/bots/reference'} target="_blank" rel="noopener">
         Reference bot on GitHub →
       </a>
+      <a href="#/fairplay">Fair play for engines →</a>
     </p>
   </div>
 
@@ -160,9 +162,13 @@ for ev in lines("/api/stream/event"):
         <h3>2 · Upgrade it to a bot account</h3>
         <p class="dim">
           Allowed only while the account has zero rated games, so upgrade before
-          you play anything.
+          you play anything. This call is the declaration itself: it puts the
+          <span class="bot-tag">BOT</span> tag beside the name, and an
+          undeclared engine is the one thing
+          <a href="#/fairplay">fair play</a> calls genuinely dishonest.
         </p>
         <CodeBlock label="shell" code={UPGRADE} />
+        <RatedNote action="upgrade" />
 
         <h3>3 · Mint a token</h3>
         <p class="dim">
@@ -185,6 +191,38 @@ for ev in lines("/api/stream/event"):
           <a href={REPO + '/tree/main/bots/reference'} target="_blank" rel="noopener"
             >reference bot</a
           > drives a full AlphaZero engine through this exact flow.
+        </p>
+      </div>
+
+      <div class="panel fair">
+        <h2>Fair play, in one screen</h2>
+        <p>
+          The rule here is not “no engines” — engines are the point. It is
+          <strong>be what your account says you are</strong>, so that a rating
+          measures whatever it claims to measure.
+        </p>
+        <ul>
+          <li>
+            <strong>Declare the account.</strong> Run
+            <code>/api/bot/upgrade</code> before playing; opponents are entitled
+            to see the tag before they sit down.
+          </li>
+          <li>
+            <strong>One account per engine</strong>, and never a human account
+            playing engine moves. A human may not take over mid-game either.
+          </li>
+          <li>
+            <strong>Any engine, any hardware.</strong> No limit on strength,
+            depth, books, tables or how much of it you rent.
+          </li>
+          <li>
+            <strong>Be a good neighbour.</strong> No seek floods, respect the
+            rate limits, and resign rather than letting a crashed bot burn
+            someone’s clock.
+          </li>
+        </ul>
+        <p class="more">
+          <a href="#/fairplay">The whole policy — including what we can and cannot detect →</a>
         </p>
       </div>
 
@@ -352,6 +390,18 @@ for ev in lines("/api/stream/event"):
   }
   .foot {
     margin-top: 12px;
+  }
+  .fair ul {
+    margin: 0 0 10px;
+    padding-left: 20px;
+  }
+  .fair li {
+    margin-bottom: 5px;
+    font-size: 0.92rem;
+  }
+  .fair .more {
+    margin: 0;
+    font-weight: 600;
   }
   .tokens {
     margin: 14px 0 10px;

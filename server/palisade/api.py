@@ -9,7 +9,7 @@ import os
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
-from palisade import auth, db, limits, rules, speed
+from palisade import auth, db, limits, mail, rules, speed
 from palisade.events import hub, is_closed, presence_dec, presence_inc
 from palisade.games import GameError, Player, SEAT_NAMES, manager
 from palisade.lobby import check_clock, lobby
@@ -27,6 +27,9 @@ COOKIE_MAX_AGE = 30 * 24 * 3600
 # to the real address, so it is trustworthy exactly when this flag says the
 # only way in is through Cloudflare (the server binds 127.0.0.1 either way).
 TRUST_CF_IP = os.environ.get("PALISADE_TRUST_CF_IP", "") not in ("", "0")
+# One verification mail a minute per account. A full bucket of one means the
+# first request always goes through and the next has to wait out the refill.
+resend_limit = limits.Buckets(burst=1.0, rate=1 / 60.0)
 
 
 def _client_key(request: Request) -> str:
@@ -52,7 +55,8 @@ def _account_json(user: dict) -> dict:
     u = dict(fresh)
     return {"id": u["id"], "username": u["username"], "bot": bool(u["is_bot"]),
             "rating": round(u["rating"]), "rd": round(u["rd"]),
-            "games": u["rated_games"]}
+            "games": u["rated_games"], "email": u["email"],
+            "emailVerified": bool(u["email_verified"])}
 
 
 async def _body(request: Request) -> dict:
@@ -67,6 +71,20 @@ async def _body(request: Request) -> dict:
 
 # -- accounts ---------------------------------------------------------------
 
+async def _mail_verification(user_id: int, username: str, email: str,
+                             changed: bool = False) -> None:
+    """Mint a link and send it, or raise MailError for the caller to translate."""
+    token = auth.issue_email_token(user_id)
+    try:
+        await mail.send_verification(email, username, token, changed=changed)
+    except mail.MailError as e:
+        # The provider's reason is for the operator's log; the response says
+        # only that it did not go, so nothing about the account or the mail
+        # infrastructure comes back over the wire.
+        print(f"palisade: verification mail to {email} failed: {e}", flush=True)
+        raise
+
+
 @router.post("/register")
 async def register(request: Request, response: Response):
     if not limits.credentials.take(_client_key(request)):
@@ -74,11 +92,68 @@ async def register(request: Request, response: Response):
     data = await _body(request)
     username = str(data.get("username", ""))
     password = str(data.get("password", ""))
+    email = str(data.get("email", ""))
     # scrypt costs ~100ms by design; run it off the event loop.
-    user_id = await asyncio.to_thread(auth.create_user, username, password)
+    user_id = await asyncio.to_thread(auth.create_user, username, password, email)
+    try:
+        await _mail_verification(user_id, username, email)
+    except mail.MailError:
+        # The account is real and the password works, so deleting it to make
+        # the failure tidy would only turn a retry into "username is taken".
+        # Say what happened and point at the door that fixes it.
+        raise HTTPException(502, "the account was created but the verification "
+                                 "email could not be sent; sign in and ask for "
+                                 "another")
     sid = auth.create_session(user_id)
     _set_session(response, sid)
     return _account_json({"id": user_id})
+
+
+@router.post("/email/verify")
+async def email_verify(request: Request):
+    # Deliberately open: the link is the credential, and it is routinely opened
+    # in a different browser from the one that signed up.
+    data = await _body(request)
+    user = auth.verify_email_token(str(data.get("token", "")))
+    return {"ok": True, "username": user["username"]}
+
+
+@router.post("/email/resend")
+async def email_resend(request: Request):
+    user = auth.require_session(request, "request a verification email")
+    fresh = db.one("SELECT * FROM users WHERE id = ?", (user["id"],))
+    if fresh["email_verified"]:
+        # Nothing to do, and saying so would tell a borrowed session which
+        # accounts are still open to a resend. 200 and silence.
+        return {"ok": True, "sent": False}
+    if not fresh["email"]:
+        raise HTTPException(400, "this account has no email address")
+    if not resend_limit.take(user["id"]):
+        raise HTTPException(429, "a verification email was just sent; "
+                                 "give it a minute")
+    try:
+        await _mail_verification(user["id"], fresh["username"], fresh["email"])
+    except mail.MailError:
+        raise HTTPException(502, "the verification email could not be sent; "
+                                 "try again shortly")
+    return {"ok": True, "sent": True}
+
+
+@router.post("/email/change")
+async def email_change(request: Request):
+    user = auth.require_session(request, "change your email address")
+    data = await _body(request)
+    password = str(data.get("password", ""))
+    await asyncio.to_thread(auth.verify_password, user["id"], password)
+    email = auth.set_email(user["id"], str(data.get("email", "")))
+    try:
+        await _mail_verification(user["id"], user["username"], email, changed=True)
+    except mail.MailError:
+        # The address is already stored and unverified, which is the honest
+        # state: the account asked to move and has not proved the new address.
+        raise HTTPException(502, "the address was changed but the verification "
+                                 "email could not be sent; ask for another")
+    return _account_json(user)
 
 
 @router.post("/login")
@@ -111,6 +186,7 @@ async def account(request: Request):
 @router.post("/bot/upgrade")
 async def bot_upgrade(request: Request):
     user = auth.require(request)
+    auth.require_verified(user, "upgrading to a bot account")
     fresh = db.one("SELECT rated_games FROM users WHERE id = ?", (user["id"],))
     if fresh["rated_games"] > 0:
         raise HTTPException(400, "account already has rated games")
@@ -295,8 +371,11 @@ async def challenge_user(username: str, request: Request):
         raise HTTPException(404, "no such user")
     data = await _body(request)
     initial, increment = check_clock(data.get("clock", {}))
+    rated = bool(data.get("rated", False))
+    if rated:
+        auth.require_verified(user, "sending a rated challenge")
     ch = lobby.challenge(_player(user), Player.from_row(dict(dest)),
-                         bool(data.get("rated", False)), initial, increment,
+                         rated, initial, increment,
                          str(data.get("color", "random")))
     return {"challenge": ch.public()}
 
@@ -304,6 +383,11 @@ async def challenge_user(username: str, request: Request):
 @router.post("/challenge/{challenge_id}/accept")
 async def challenge_accept(challenge_id: str, request: Request):
     user = auth.require(request, "play")
+    # A rated game makes a claim about both seats, so both have to be confirmed
+    # accounts -- gating only the challenger would leave the obvious way round.
+    pending = lobby.challenges.get(challenge_id)
+    if pending is not None and pending.rated:
+        auth.require_verified(user, "accepting a rated challenge")
     game = lobby.accept(challenge_id, user["id"])
     return {"game": game.full_msg()}
 
@@ -327,8 +411,10 @@ async def seek(request: Request):
     user = auth.require(request, "play")
     data = await _body(request)
     initial, increment = check_clock(data.get("clock", {}))
-    game = lobby.add_seek(_player(user), bool(data.get("rated", False)),
-                          initial, increment)
+    rated = bool(data.get("rated", False))
+    if rated:
+        auth.require_verified(user, "posting a rated seek")
+    game = lobby.add_seek(_player(user), rated, initial, increment)
     return {"ok": True, "matched": game is not None}
 
 

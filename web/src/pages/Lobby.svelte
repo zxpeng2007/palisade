@@ -5,6 +5,7 @@
   import { PRESETS, clockLabel } from '../lib/format';
   import Challenges from '../lib/Challenges.svelte';
   import Leaderboard from '../lib/Leaderboard.svelte';
+  import RatedNote from '../lib/RatedNote.svelte';
   import Seeks from '../lib/Seeks.svelte';
   import TopGames from '../lib/TopGames.svelte';
 
@@ -55,8 +56,9 @@
         <label class="rated-toggle">
           <input type="checkbox" bind:checked={rated} /> Rated
         </label>
+        <RatedNote action="seek" />
         {#if !me}
-          <p class="dim">
+          <p class="dim signin">
             <a href="#/login">Sign in</a> to play — spectating is open to all.
           </p>
         {/if}
@@ -119,5 +121,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
+  }
+  .signin {
+    margin-bottom: 0;
   }
 </style>
