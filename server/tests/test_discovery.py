@@ -361,7 +361,14 @@ def test_avg_rating_is_the_mean_of_both_players(client):
     assert entry["avgRating"] == round((row["p1_rating"] + row["p2_rating"]) / 2)
 
 
-def test_top_games_kind_needs_both_players_to_match(client):
+def test_top_games_kind_matches_on_at_least_one_player(client):
+    """A person against an engine belongs to both audiences.
+
+    Under a both-players rule those games appeared in no mode at all: on the
+    live site four of five games were invisible in both human and engine
+    mode. `kind` therefore selects games containing at least one player of
+    that kind, and mixed games deliberately show up twice.
+    """
     h_bot_1 = bot_token_for(client, "tg_bot_one")
     h_bot_2 = bot_token_for(client, "tg_bot_two")
     h_human_1 = token_for(client, "tg_human_one")
@@ -371,12 +378,12 @@ def test_top_games_kind_needs_both_players_to_match(client):
     mixed = play_game(client, h_bot_1, "tg_human_two", h_human_2, clock=RAPID)
 
     bot_ids = ids_in(top_games(client, kind="bot")["recent"])
-    assert engines in bot_ids
-    assert people not in bot_ids and mixed not in bot_ids
+    assert engines in bot_ids and mixed in bot_ids
+    assert people not in bot_ids
 
     human_ids = ids_in(top_games(client, kind="human")["recent"])
-    assert people in human_ids
-    assert engines not in human_ids and mixed not in human_ids
+    assert people in human_ids and mixed in human_ids
+    assert engines not in human_ids
 
     all_ids = ids_in(top_games(client, kind="all")["recent"])
     assert {engines, people, mixed} <= all_ids

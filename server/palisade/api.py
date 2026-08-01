@@ -199,10 +199,14 @@ async def games_top(kind: str = "all", limit: int = 8):
     limit = max(1, min(30, limit))
 
     def keep(a_bot: bool, b_bot: bool) -> bool:
+        # "At least one", not "both": a person against an engine is interesting
+        # to both audiences, and under a stricter rule those games would be
+        # invisible in every mode -- which is what happened on the live site,
+        # where four of five games showed up nowhere.
         if kind == "bot":
-            return a_bot and b_bot
+            return a_bot or b_bot
         if kind == "human":
-            return not a_bot and not b_bot
+            return not a_bot or not b_bot
         return True
 
     live: dict[str, list] = {}

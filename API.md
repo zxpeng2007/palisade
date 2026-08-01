@@ -139,8 +139,13 @@ rating of the two players:
 ```
 
 `live` holds games in progress; `recent` holds finished ones. Both are keyed by
-speed, and a speed with nothing to show is omitted. `kind` filters to games
-where both players are engines (`bot`), neither is (`human`), or any (`all`).
+speed, and a speed with nothing to show is omitted.
+
+`kind` filters by who is playing, on an *at least one* basis: `bot` returns
+games with at least one engine in them, `human` games with at least one
+person, `all` everything. A person against an engine therefore appears under
+both — it is a game both audiences want to see, and the stricter reading
+would leave those games visible nowhere.
 
 ### Playing
 
