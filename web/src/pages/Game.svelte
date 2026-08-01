@@ -6,6 +6,15 @@
   import Board from '../lib/Board.svelte';
   import Clock from '../lib/Clock.svelte';
   import MoveList from '../lib/MoveList.svelte';
+  import ReviewPanel from '../lib/ReviewPanel.svelte';
+  import {
+    fetchReview,
+    isRunning,
+    startReview,
+    watchReview,
+    type Review,
+    type ReviewMove,
+  } from '../lib/review';
 
   export let id: string;
 
@@ -54,6 +63,64 @@
   $: topP = full ? full[top] : null;
   $: bottomP = full ? full[bottom] : null;
   $: tc = full ? clockLabel(full.clock) : '';
+
+  // -- review ---------------------------------------------------------------
+  // Only finished games can be reviewed, and their review is stored for good,
+  // so the page asks once — the moment it learns the game is over — and only
+  // polls while a job is genuinely in flight.
+  let review: Review | null = null;
+  let reviewErr = '';
+  let reviewBusy = false;
+  let asked = false;
+  let unwatch: (() => void) | null = null;
+
+  $: finished = state !== null && state.status === 'finished';
+  $: if (finished && !asked) probeReview();
+  $: marks =
+    review && review.status === 'done' && review.moves
+      ? markMap(review.moves)
+      : {};
+
+  function markMap(ms: ReviewMove[]): Record<number, string> {
+    const out: Record<number, string> = {};
+    for (const m of ms) out[m.ply] = m.class;
+    return out;
+  }
+
+  function take(r: Review | null): void {
+    if (!r) return;
+    review = r;
+    if (unwatch) unwatch();
+    unwatch = isRunning(r)
+      ? watchReview(
+          id,
+          (u) => (review = u),
+          (msg) => (reviewErr = msg)
+        )
+      : null;
+  }
+
+  async function probeReview() {
+    asked = true;
+    try {
+      take(await fetchReview(id));
+    } catch {
+      // Having nothing to show is not worth a banner: the button appears, and
+      // if starting a review is refused too, that refusal is what gets said.
+    }
+  }
+
+  async function beginReview() {
+    reviewBusy = true;
+    reviewErr = '';
+    try {
+      take(await startReview(id));
+    } catch (e: any) {
+      reviewErr = e.message;
+    } finally {
+      reviewBusy = false;
+    }
+  }
 
   $: canNavigate = have > latest; // every ply 0..latest is drawable
   $: shownPly = canNavigate ? ply : latest;
@@ -217,6 +284,7 @@
       unUser();
       window.removeEventListener('keydown', onKey);
       clearTimeout(flashTimer);
+      if (unwatch) unwatch();
     };
   });
 </script>
@@ -239,6 +307,21 @@
             </button>
           {/if}
         </div>
+      {/if}
+
+      {#if finished}
+        <ReviewPanel
+          {review}
+          error={reviewErr}
+          busy={reviewBusy}
+          total={moves.length}
+          ply={shownPly}
+          navigable={canNavigate}
+          first={full.first.username}
+          second={full.second.username}
+          onStart={beginReview}
+          onSelect={goto}
+        />
       {/if}
     </div>
 
@@ -272,6 +355,7 @@
       <MoveList
         {moves}
         {latest}
+        {marks}
         ply={shownPly}
         navigable={canNavigate}
         onSelect={goto}

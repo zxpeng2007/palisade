@@ -21,9 +21,14 @@ export async function api(
     // keepalive-empty or non-JSON body; fall through to status handling
   }
   if (!res.ok) {
-    throw new Error(
+    const err: any = new Error(
       data && data.error ? data.error : `${res.status} ${res.statusText}`
     );
+    // Some callers need the code as well as the reason: a 404 from the review
+    // endpoint means "never reviewed", which is a normal state to render, not
+    // an error to report.
+    err.status = res.status;
+    throw err;
   }
   return data;
 }

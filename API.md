@@ -147,6 +147,46 @@ person, `all` everything. A person against an engine therefore appears under
 both — it is a game both audiences want to see, and the stricter reading
 would leave those games visible nowhere.
 
+### Game review
+
+A finished game can be analysed move by move. Analysis is expensive — a
+full game is a couple of minutes of engine time on a small server — so it runs
+as a job and the result is stored: the first request starts it, later requests
+return the same answer immediately. A game never changes, so a review never
+needs recomputing.
+
+    POST /api/game/{id}/review     start one (or return the existing state)
+    GET  /api/game/{id}/review     state, and the result when it is ready
+
+```json
+{"status":"done","engine":"gen-010","sims":600,
+ "accuracy":{"first":82.4,"second":74.1},
+ "moves":[
+   {"ply":1,"move":"e2","best":"e2","eval":0.06,"loss":0.0,"class":"best"},
+   {"ply":2,"move":"e8","best":"hd3","eval":-0.31,"loss":0.19,"class":"mistake"}
+ ]}
+```
+
+`status` is `pending`, `running`, `done`, or `failed`; while running,
+`progress` gives the fraction of positions analysed. `eval` is the position's
+value from the first player's point of view, in −1..1, so one graph reads
+correctly for both players. `loss` is how much win probability the mover gave
+up compared with the engine's choice, in 0..1. `best` is the move the engine
+preferred, and equals `move` when the player found it.
+
+`class` is one of `brilliant`, `best`, `excellent`, `good`, `inaccuracy`,
+`mistake`, `blunder`. The bands are by win-probability loss: `excellent` up to
+0.02, `good` to 0.05, `inaccuracy` to 0.10, `mistake` to 0.20, `blunder`
+beyond. `best` means the engine agreed with the move. `brilliant` is reserved
+for a move the engine agreed with that its own policy had nearly dismissed
+(prior under 2%) and that beats the second choice by more than 0.15 — a move
+that had to be found rather than followed.
+
+Review is only available for finished games; asking for one on a live game
+returns 400. Analysis reflects the engine and search depth named in the
+response, and both are recorded, because a review is a claim about a
+particular engine's opinion rather than about the truth.
+
 ### Playing
 
 | method | path | notes |

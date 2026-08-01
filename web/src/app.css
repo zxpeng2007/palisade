@@ -14,6 +14,18 @@
   --p2: #6aa1d8; /* Player 2: cool */
   --wall: #b98a52;
   --cell: #34322d;
+
+  /* Review classifications. Colour never carries the meaning on its own —
+     every class has its own glyph as well (see MoveMark.svelte) — but the
+     ramp still runs found-it teal, through green and yellow, to the same red
+     the rest of the site uses for damage. */
+  --cls-brilliant: #46c2b8;
+  --cls-best: #7fa650;
+  --cls-excellent: #a8bf7a;
+  --cls-good: #9aa892;
+  --cls-inaccuracy: #dfb455;
+  --cls-mistake: #de8a3f;
+  --cls-blunder: #cc5040;
 }
 
 * {

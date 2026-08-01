@@ -9,7 +9,7 @@ import os
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
-from palisade import auth, db, limits, mail, rules, speed
+from palisade import auth, db, limits, mail, review, rules, speed
 from palisade.events import hub, is_closed, presence_dec, presence_inc
 from palisade.games import GameError, Player, SEAT_NAMES, manager
 from palisade.lobby import check_clock, lobby
@@ -527,6 +527,42 @@ async def game_get(game_id: str):
     moves = full["state"]["moves"]
     full["views"] = rules.replay_views(moves.split(",") if moves else [])
     return full
+
+
+# -- review -----------------------------------------------------------------
+
+@router.post("/game/{game_id}/review")
+async def review_start(game_id: str):
+    """Start a review, or hand back the one that is already running or done.
+
+    Open, like the game itself: a review is a fact about a public game, and the
+    work is bounded -- each finished game is analysed once, ever, and then
+    served from the row.
+    """
+    game = db.one("SELECT status FROM games WHERE id = ?", (game_id,))
+    # An id that names nothing is 404 here as it is everywhere else on this
+    # API. Collapsing it into the 400 would make a typo in a game id and a
+    # game that is merely still running indistinguishable to a client, and
+    # every other route already draws that line.
+    if game is None:
+        raise HTTPException(404, "no such game")
+    if game["status"] != "finished":
+        raise HTTPException(400, "review is only available for finished games")
+    return review.request(game_id)
+
+
+@router.get("/game/{game_id}/review")
+async def review_state(game_id: str):
+    state = review.state(game_id)
+    if state is not None:
+        return state
+    if db.one("SELECT 1 FROM games WHERE id = ?", (game_id,)) is None:
+        raise HTTPException(404, "no such game")
+    # The game is real but nobody has asked for a review of it. Reporting that
+    # plainly beats a 404, which a polling client cannot tell from a typo in
+    # the game id.
+    return {"status": "none", "engine": review.engine_name(),
+            "sims": review.configured_sims()}
 
 
 def _live_game(game_id: str):

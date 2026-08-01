@@ -68,7 +68,37 @@ CREATE TABLE IF NOT EXISTS games (
 );
 CREATE INDEX IF NOT EXISTS games_p1 ON games(p1, created DESC);
 CREATE INDEX IF NOT EXISTS games_p2 ON games(p2, created DESC);
+-- One row per reviewed game: the job record while it runs and the answer
+-- afterwards. Keyed by game because a finished game never changes, so its
+-- review is computed once and kept. `engine` and `sims` say which engine's
+-- opinion this is, which is the only thing that makes the numbers meaningful.
+CREATE TABLE IF NOT EXISTS reviews (
+    game_id TEXT PRIMARY KEY REFERENCES games(id),
+    status TEXT NOT NULL DEFAULT 'pending',
+    engine TEXT,
+    sims INTEGER,
+    progress REAL NOT NULL DEFAULT 0,
+    result TEXT,
+    error TEXT,
+    created TEXT NOT NULL DEFAULT (datetime('now')),
+    updated TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS reviews_status ON reviews(status);
 """
+
+# Columns of `reviews` as ALTER TABLE would add them: no `NOT NULL` without a
+# default and no non-constant default, which is why `updated` is a plain TEXT
+# here and a stamped column in _SCHEMA.
+_REVIEW_COLUMNS = (
+    ("status", "TEXT NOT NULL DEFAULT 'pending'"),
+    ("engine", "TEXT"),
+    ("sims", "INTEGER"),
+    ("progress", "REAL NOT NULL DEFAULT 0"),
+    ("result", "TEXT"),
+    ("error", "TEXT"),
+    ("created", "TEXT"),
+    ("updated", "TEXT"),
+)
 
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
@@ -98,6 +128,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # grandfathered accounts need.
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email "
                  "ON users(email COLLATE NOCASE)")
+
+    # Reviews arrived long after the first deployment. The table itself comes
+    # from _SCHEMA, but CREATE TABLE IF NOT EXISTS does nothing to a database
+    # that already holds an earlier version of it, so anything added to the
+    # table since needs the same treatment as users.email above.
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(reviews)")}
+    for name, decl in _REVIEW_COLUMNS:
+        if name not in columns:
+            conn.execute(f"ALTER TABLE reviews ADD COLUMN {name} {decl}")
 
 
 def connect(path: str | None = None) -> sqlite3.Connection:

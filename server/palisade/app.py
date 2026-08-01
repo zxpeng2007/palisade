@@ -2,13 +2,16 @@
 
     uvicorn palisade.app:app --host 0.0.0.0 --port 8000
 
-Environment: PALISADE_DB (sqlite path, default ./palisade.db). If web/dist
-exists (built SPA), it is served at the root; the API lives under /api and
-the browser socket at /ws either way.
+Environment: PALISADE_DB (sqlite path, default ./palisade.db),
+PALISADE_REVIEW_CHECKPOINT and PALISADE_REVIEW_SIMS (the engine game review
+speaks for, and how hard it thinks). If web/dist exists (built SPA), it is
+served at the root; the API lives under /api and the browser socket at /ws
+either way.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,7 +21,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from palisade import db, rules, ws
+from palisade import db, review, rules, ws
 from palisade.api import router
 
 
@@ -35,7 +38,18 @@ async def lifespan(app: FastAPI):
         print(f"palisade: aborted {n} game(s) interrupted by restart")
     db.run("DELETE FROM sessions WHERE created < datetime('now', '-30 days')")
     rules.warmup()
-    yield
+    # One worker for the whole process, draining reviews one at a time; it also
+    # re-queues any review the last shutdown interrupted.
+    reviewer = review.start()
+    try:
+        yield
+    finally:
+        # Ask the analysis to stand down at its next position, then drop the
+        # worker. Cancelling alone would not do it: the search runs in a
+        # thread, and a thread cannot be interrupted from out here.
+        review.stop()
+        reviewer.cancel()
+        await asyncio.gather(reviewer, return_exceptions=True)
 
 
 app = FastAPI(title="Palisade", docs_url=None, redoc_url=None, lifespan=lifespan)
